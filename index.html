@@ -283,13 +283,15 @@
         let dbTransactions = {};
         let smartAutoRules = []; // 구글 시트 Rules 탭에서 동적으로 로드
         let pendingReviewItems = [];
+        let userCompareChart = null;
+        let categoryPieChart = null;
 
         // Chart.js 인스턴스
         let userCompareChart = null;
         let categoryPieChart = null;
 
         // 배포하신 구글 앱스 스크립트 웹앱 URL 입력
-        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycby5LFQ06YAxJ-L9cRy3LO6DUoWBMAChz2Ads0HOCpmX434LdyAt888Uk9RSH-jwMgtK5Q/exec";
+        const GAS_WEB_APP_URL = "여기에_GAS_WEB_APP_URL_입력";
 
         window.onload = function() {
             // 앱 실행 시 구글 시트에서 데이터 및 규칙 로드 (연동 후 주석 해제)
@@ -351,89 +353,103 @@
             renderAll();
         }
 
-        // 이미지 업로드 및 구글 시트 Rules 참조 자동 배정 프로세스
-        function handleCaptureUpload(event) {
-            let files = event.target.files;
-            if (!files || files.length === 0) return;
+        // 실제 이미지 -> GAS -> Drive + Gemini -> Rules -> Sheets 처리
+        async function handleCaptureUpload(event) {
+            const files = Array.from(event.target.files || []);
+            if (!files.length) return;
 
-            let container = document.getElementById('uploadStatusContainer');
-            let statusList = document.getElementById('statusList');
+            const container = document.getElementById('uploadStatusContainer');
+            const statusList = document.getElementById('statusList');
             container.classList.remove('hidden');
             statusList.innerHTML = '';
 
-            let samplePool = [
-                { name: "스타벅스 강남점", card: "현대카드", cardGuessUser: "용이", amt: 18000 },
-                { name: "이마트 역삼점", card: "신한카드", cardGuessUser: "갱이", amt: 89000 },
-                { name: "처음보는 성수소품샵", card: "국민카드", cardGuessUser: "기타", amt: 35000 }
-            ];
+            if (GAS_WEB_APP_URL.includes('여기에_')) {
+                alert('먼저 GAS_WEB_APP_URL을 실제 Google Apps Script 웹앱 URL로 설정해 주세요.');
+                event.target.value = '';
+                return;
+            }
 
-            pendingReviewItems = [];
-
-            Array.from(files).forEach((file, index) => {
-                let statusId = `status-item-${index}`;
-                statusList.innerHTML += `
+            for (let index = 0; index < files.length; index++) {
+                const file = files[index];
+                const statusId = `status-item-${index}`;
+                statusList.insertAdjacentHTML('beforeend', `
                     <div id="${statusId}" class="flex items-center justify-between p-3 bg-white rounded-xl border border-stone-200 text-xs sm:text-sm shadow-sm">
                         <div class="flex items-center gap-2 overflow-hidden">
                             <span class="animate-spin text-stone-600">⏳</span>
-                            <span class="font-medium text-stone-700 truncate">${file.name}</span>
+                            <span class="font-medium text-stone-700 truncate">${escapeHtml(file.name)}</span>
                         </div>
-                        <span class="text-stone-600 font-semibold shrink-0">분석 중...</span>
+                        <span class="text-stone-600 font-semibold shrink-0">AI 분석 중...</span>
                     </div>
-                `;
+                `);
 
-                setTimeout(() => {
-                    let parsed = samplePool[Math.floor(Math.random() * samplePool.length)];
-                    
-                    // 🌟 핵심: 구글 시트 Rules에서 가져온 smartAutoRules 동적 참조 매칭
-                    let matchedRule = smartAutoRules.find(rule => parsed.name.includes(rule.keyword));
+                try {
+                    const dataUrl = await fileToDataUrl(file);
+                    const base64 = dataUrl.split(',')[1];
+                    const result = await postJsonToGas({
+                        action: 'processCapture',
+                        fileName: file.name,
+                        mimeType: file.type || 'image/jpeg',
+                        base64: base64,
+                        currentYearMonth: currentYearMonth
+                    });
 
-                    if (matchedRule) {
-                        // [자동 배정 성공] 시트 규칙에 있으므로 모달 없이 즉시 반영
-                        if(!dbTransactions[currentYearMonth]) dbTransactions[currentYearMonth] = [];
-                        let newTx = {
-                            date: "2026-09-28 21:10",
-                            card: parsed.card,
-                            user: matchedRule.user,
-                            merchant: parsed.name,
-                            category: matchedRule.category,
-                            amount: parsed.amt
-                        };
-                        dbTransactions[currentYearMonth].unshift(newTx);
+                    if (!result.ok) throw new Error(result.error || '서버 처리 실패');
 
-                        // 구글 시트(Transactions)에 백그라운드 POST 저장 요청
-                        saveTransactionToGoogleSheet(newTx);
-
-                        let itemEl = document.getElementById(statusId);
-                        if(itemEl) {
-                            itemEl.className = "flex items-center justify-between p-3 bg-stone-100 rounded-xl border border-stone-200 text-xs sm:text-sm shadow-sm";
-                            itemEl.innerHTML = `<span class="text-stone-700">⚡ [시트규칙 자동배정] ${parsed.name} (${matchedRule.user})</span>`;
-                        }
-                    } else {
-                        // [신규 항목] 시트 규칙에 없으므로 검토 대기열에 추가
-                        pendingReviewItems.push({
-                            date: "2026-09-28 21:10",
-                            card: parsed.card,
-                            user: parsed.cardGuessUser,
-                            merchant: parsed.name,
-                            category: "기타",
-                            amount: parsed.amt
-                        });
-
-                        let itemEl = document.getElementById(statusId);
-                        if(itemEl) {
-                            itemEl.className = "flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs sm:text-sm shadow-sm";
-                            itemEl.innerHTML = `<span class="text-amber-800">🔍 [신규 가맹점 감지] ${parsed.name} - 확인 필요</span>`;
-                        }
+                    if (result.transactions && result.transactions.length) {
+                        if (!dbTransactions[currentYearMonth]) dbTransactions[currentYearMonth] = [];
+                        result.transactions.forEach(tx => dbTransactions[currentYearMonth].unshift(tx));
+                    }
+                    if (result.reviewItems && result.reviewItems.length) {
+                        pendingReviewItems.push(...result.reviewItems.map(item => ({
+                            date: item.date, card: item.card, user: item.user || '기타', merchant: item.merchant,
+                            category: item.category || '기타', amount: item.amount
+                        })));
                     }
 
-                    renderAll();
-
-                    if(index === files.length - 1 && pendingReviewItems.length > 0) {
-                        setTimeout(() => { openReviewModal(); }, 500);
+                    const itemEl = document.getElementById(statusId);
+                    if (itemEl) {
+                        itemEl.className = `flex items-center justify-between p-3 ${result.needsReview ? 'bg-amber-50 border-amber-200' : 'bg-stone-100 border-stone-200'} rounded-xl border text-xs sm:text-sm shadow-sm`;
+                        itemEl.innerHTML = `<span class="${result.needsReview ? 'text-amber-800' : 'text-stone-700'}">${result.needsReview ? '🔍 AI 분석 완료 — 신규/확인 필요' : '⚡ AI 분석·자동분류 완료'}: ${escapeHtml(result.summary || file.name)}</span>`;
                     }
-                }, (index + 1) * 1000);
-            });
+                } catch (error) {
+                    const itemEl = document.getElementById(statusId);
+                    if (itemEl) {
+                        itemEl.className = "flex items-center justify-between p-3 bg-red-50 rounded-xl border border-red-200 text-xs sm:text-sm shadow-sm";
+                        itemEl.innerHTML = `<span class="text-red-700">❌ 처리 실패: ${escapeHtml(error.message || String(error))}</span>`;
+                    }
+                    console.error('캡처 처리 오류:', error);
+                }
+            }
+
+            renderAll();
+            if (pendingReviewItems.length > 0) openReviewModal();
             event.target.value = '';
+        }
+
+        function fileToDataUrl(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function postJsonToGas(payload) {
+            const response = await fetch(GAS_WEB_APP_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            });
+            const text = await response.text();
+            let data;
+            try { data = JSON.parse(text); }
+            catch (_) { throw new Error('Google Apps Script 응답을 JSON으로 읽지 못했습니다: ' + text.slice(0, 200)); }
+            return data;
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
         }
 
         // 구글 시트에 데이터 POST 전송 함수
