@@ -284,16 +284,20 @@
         let smartAutoRules = []; // 구글 시트 Rules 탭에서 동적으로 로드
         let pendingReviewItems = [];
 
+        // Chart.js 인스턴스
+        let userCompareChart = null;
+        let categoryPieChart = null;
+
         // 배포하신 구글 앱스 스크립트 웹앱 URL 입력
-        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwxRwYDHm1vrdQv3PeLb154MQRUJImHBP1009sJCR94ZTmomWY3S9ZYIzLAmjeuJIBrcg/exec";
+        const GAS_WEB_APP_URL = "여기에_구글_앱스_스크립트_웹앱_URL_입력";
 
         window.onload = function() {
             // 앱 실행 시 구글 시트에서 데이터 및 규칙 로드 (연동 후 주석 해제)
             // loadDataFromGoogleSheet();
             
-            // 임시 테스트용 렌더링
-            renderAll();
+            // 차트를 먼저 생성한 뒤 화면을 렌더링
             initCharts();
+            renderAll();
         };
 
         // 구글 시트에서 Transactions와 Rules를 한 번에 불러오는 함수
