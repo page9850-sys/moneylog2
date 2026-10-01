@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>용이 & 갱이의 스마트 정산 가계부</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Pretendard Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Pretendard', sans-serif; word-break: keep-all; }
+        .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    </style>
+</head>
+<body class="bg-stone-50/60 text-stone-800 min-h-screen pb-16">
+
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-stone-700 to-amber-900 text-stone-100 shadow-md sticky top-0 z-40">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div>
+                <h1 class="text-lg sm:text-xl font-bold flex items-center gap-2">
+                    💳 용이 & 갱이의 스마트 정산
+                </h1>
+                <p class="text-stone-300 text-xs">구글 시트 연동 및 스마트 규칙 자동 배정 시스템</p>
+            </div>
+            <!-- Month Selector -->
+            <div class="flex items-center gap-3 bg-white/10 px-4 py-2 rounded-2xl backdrop-blur-md border border-white/15">
+                <button onclick="navigateMonth(-1)" class="w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-white/25 rounded-xl transition text-lg font-bold">&larr;</button>
+                <span id="currentMonthDisplay" class="font-bold text-sm sm:text-base min-w-[90px] text-center">2026년 9월</span>
+                <button onclick="navigateMonth(1)" class="w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-white/25 rounded-xl transition text-lg font-bold">&rarr;</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="max-w-5xl mx-auto px-4 mt-6">
+        <div class="flex border-b border-stone-200 gap-6 sm:gap-8">
+            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="pb-3 font-bold text-stone-700 border-b-2 border-stone-700 transition flex items-center gap-2 text-sm sm:text-base">
+                📊 이번 달 정산 대시보드
+            </button>
+            <button onclick="switchTab('comparison')" id="tab-comparison" class="pb-3 font-medium text-stone-400 hover:text-stone-700 transition flex items-center gap-2 text-sm sm:text-base">
+                📈 월별 비교 및 차트
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <main class="max-w-5xl mx-auto px-4 mt-6 space-y-6">
+
+        <!-- TAB 1: Dashboard -->
+        <div id="view-dashboard" class="space-y-6">
+
+            <!-- 🤖 AI Capture Trigger & Multi-Upload Area -->
+            <div class="bg-gradient-to-r from-stone-100 to-amber-50/50 p-5 sm:p-6 rounded-3xl shadow-sm border border-stone-200/60 space-y-4">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                        <h3 class="font-bold text-stone-900 text-base flex items-center gap-2">
+                            🤖 AI 스파크 자동 인식 트리거
+                        </h3>
+                        <p class="text-xs text-stone-500 mt-1">시트 Rules 규칙으로 자동 배정되며, 신규 항목만 검토 창을 띄웁니다.</p>
+                    </div>
+                    <label class="cursor-pointer bg-stone-700 hover:bg-stone-800 text-white text-xs font-semibold px-4 py-3 rounded-2xl transition shadow-md flex items-center gap-2 shrink-0">
+                        <span>📁 캡처 이미지 여러 장 선택</span>
+                        <input type="file" id="captureInput" multiple accept="image/*" class="hidden" onchange="handleCaptureUpload(event)">
+                    </label>
+                </div>
+                <!-- Real-time Status List for Each Image -->
+                <div id="uploadStatusContainer" class="hidden space-y-2 pt-2 border-t border-stone-200">
+                    <p class="text-xs font-bold text-stone-700">이미지별 AI 분석 및 처리 현황:</p>
+                    <div id="statusList" class="space-y-2"></div>
+                </div>
+            </div>
+
+            <!-- Top Summary Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-stone-100 flex flex-col justify-between">
+                    <p class="text-xs font-semibold text-stone-400 uppercase">이번 달 총 지출</p>
+                    <h3 id="totalSpend" class="text-2xl font-extrabold text-stone-900 mt-2">0원</h3>
+                    <span class="text-xs text-stone-400 mt-1">전체 합계</span>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-stone-100 flex flex-col justify-between">
+                    <p class="text-xs font-semibold text-sky-600 uppercase">용이(남편) 사용액</p>
+                    <h3 id="yongSpend" class="text-2xl font-extrabold text-sky-700 mt-2">0원</h3>
+                    <span class="text-xs text-stone-400 mt-1">개인 명의 카드 사용</span>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-stone-100 flex flex-col justify-between">
+                    <p class="text-xs font-semibold text-amber-600 uppercase">갱이(아내) 사용액</p>
+                    <h3 id="gaengSpend" class="text-2xl font-extrabold text-amber-600 mt-2">0원</h3>
+                    <span class="text-xs text-stone-400 mt-1">개인 명의 카드 사용</span>
+                </div>
+                <div class="bg-gradient-to-br from-stone-700 to-amber-800 text-white p-5 rounded-2xl shadow-md flex flex-col justify-between">
+                    <div>
+                        <p class="text-xs font-semibold text-stone-200 uppercase">최종 정산 결과</p>
+                        <h3 id="settlementResult" class="text-sm font-bold mt-2 leading-snug">계산 중...</h3>
+                    </div>
+                    <button onclick="copySettlementToClipboard()" class="mt-4 bg-white/20 hover:bg-white/30 text-white text-xs py-2 px-3 rounded-xl font-bold transition text-center backdrop-blur-sm">
+                        📋 카톡용 정산 내용 복사
+                    </button>
+                </div>
+            </div>
+
+            <!-- Card Company Breakdown & Transactions Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Card Company Totals -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-100 lg:col-span-1 space-y-4">
+                    <h3 class="font-bold text-stone-800 text-base flex items-center justify-between">
+                        <span>💳 카드사별 총액</span>
+                        <span class="text-xs font-normal text-stone-400">명세서 기준</span>
+                    </h3>
+                    <div id="cardCompanyList" class="space-y-3"></div>
+                </div>
+
+                <!-- Transaction List -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-100 lg:col-span-2 space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold text-stone-800 text-base">📝 실시간 지출 내역</h3>
+                        <button onclick="openAddModal()" class="bg-stone-700 hover:bg-stone-800 text-white text-xs px-3.5 py-2 rounded-xl font-semibold transition shadow-sm">
+                            + 수동 내역 추가
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table class="w-full text-left border-collapse text-xs sm:text-sm whitespace-nowrap">
+                            <thead>
+                                <tr class="border-b border-stone-100 text-stone-400 font-semibold">
+                                    <th class="py-3 px-2">날짜</th>
+                                    <th class="py-3 px-2">카드 (사용자)</th>
+                                    <th class="py-3 px-2">가맹점</th>
+                                    <th class="py-3 px-2">카테고리</th>
+                                    <th class="py-3 px-2 text-right">금액</th>
+                                    <th class="py-3 px-2 text-center">관리</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transactionTableBody" class="divide-y divide-stone-50"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 갱이가 사용한 금액 상세 표 -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-100 space-y-4">
+                <h3 class="font-bold text-stone-800 text-base flex items-center gap-2">
+                    🛍️ 갱이(아내) 사용 내역 상세 (보낼 금액 산출용)
+                </h3>
+                <div class="table-container">
+                    <table class="w-full text-left border-collapse text-xs sm:text-sm whitespace-nowrap">
+                        <thead>
+                            <tr class="border-b border-stone-100 text-stone-400 font-semibold">
+                                <th class="py-3 px-2">날짜</th>
+                                <th class="py-3 px-2">카드사</th>
+                                <th class="py-3 px-2">가맹점</th>
+                                <th class="py-3 px-2">카테고리</th>
+                                <th class="py-3 px-2 text-right">금액</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gaengTransactionTableBody" class="divide-y divide-stone-50"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: Comparison & Charts -->
+        <div id="view-comparison" class="hidden space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-100 space-y-6">
+                <div>
+                    <h3 class="font-bold text-slate-800 text-lg">📈 월별 지출 트렌드 및 비교 분석</h3>
+                    <p class="text-xs text-stone-400 mt-1">X축에 월을 두고 용이와 갱이의 지출 규모를 비교합니다.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-stone-50/50 p-4 rounded-2xl border border-stone-100">
+                        <h4 class="font-semibold text-stone-700 text-sm mb-3">월별 용이 vs 갱이 비교 (X축: 월)</h4>
+                        <div class="relative h-64"><canvas id="userCompareChart"></canvas></div>
+                    </div>
+                    <div class="bg-stone-50/50 p-4 rounded-2xl border border-stone-100">
+                        <h4 class="font-semibold text-stone-700 text-sm mb-3">이번 달 카테고리별 비중</h4>
+                        <div class="relative h-64"><canvas id="categoryPieChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 가맹점별 월별 비교표 -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-100 space-y-4">
+                <h3 class="font-bold text-stone-800 text-base">🔍 실제 사용처(가맹점)별 월별 지출 비교표</h3>
+                <div class="table-container">
+                    <table class="w-full text-left border-collapse text-xs sm:text-sm whitespace-nowrap">
+                        <thead>
+                            <tr class="border-b border-stone-100 text-stone-400 font-semibold" id="merchantTableHeader"></tr>
+                        </thead>
+                        <tbody id="merchantTableBody" class="divide-y divide-stone-50"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 직전 3개월 요약표 -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-100 space-y-4">
+                <h3 class="font-bold text-stone-800 text-base">📋 직전 3개월 월별 세부 정산 요약표 (용이 vs 갱이)</h3>
+                <div class="table-container">
+                    <table class="w-full text-left border-collapse text-xs sm:text-sm whitespace-nowrap">
+                        <thead>
+                            <tr class="border-b border-stone-100 text-stone-400 font-semibold">
+                                <th class="py-3 px-3">월</th>
+                                <th class="py-3 px-3">총 지출액</th>
+                                <th class="py-3 px-3">용이(남편)</th>
+                                <th class="py-3 px-3">갱이(아내)</th>
+                                <th class="py-3 px-3 text-right">정산 결과</th>
+                            </tr>
+                        </thead>
+                        <tbody id="monthlySummaryTableBody" class="divide-y divide-stone-50"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modals (Add, Edit, Review) -->
+    <div id="addModal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <h3 id="modalTitle" class="font-bold text-lg text-stone-800">수동 거래 내역 추가</h3>
+            <form onsubmit="saveTransaction(event)" class="space-y-3">
+                <input type="hidden" id="editIndex" value="-1">
+                <div>
+                    <label class="block text-xs font-semibold text-stone-500 mb-1">날짜 및 시간</label>
+                    <input type="text" id="inputDate" class="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-600">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-stone-500 mb-1">카드사</label>
+                        <select id="inputCard" class="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm">
+                            <option value="현대카드">현대카드</option><option value="신한카드">신한카드</option><option value="국민카드">국민카드</option><option value="삼성카드">삼성카드</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-stone-500 mb-1">사용자 (명의)</label>
+                        <select id="inputUser" class="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm">
+                            <option value="용이">용이 (남편)</option><option value="갱이">갱이 (아내)</option><option value="기타">기타 / 공동</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-stone-500 mb-1">가맹점 이름</label>
+                    <input type="text" id="inputMerchant" placeholder="예: 스타벅스 강남점" required class="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-stone-500 mb-1">금액 (원)</label>
+                        <input type="number" id="inputAmount" placeholder="15000" required class="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-stone-500 mb-1">카테고리</label>
+                        <select id="inputCategory" class="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm">
+                            <option value="식비/카페">식비/카페</option><option value="쇼핑/마트">쇼핑/마트</option><option value="교통/주유">교통/주유</option><option value="의료/생활">의료/생활</option><option value="기타">기타</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 pt-3">
+                    <button type="button" onclick="closeAddModal()" class="px-4 py-2 text-sm text-stone-500 font-medium hover:bg-stone-100 rounded-xl">취소</button>
+                    <button type="submit" class="px-4 py-2 text-sm bg-stone-700 hover:bg-stone-800 text-white font-semibold rounded-xl shadow-sm">저장하기</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- AI Review Modal (신규 항목만 팝업) -->
+    <div id="reviewModal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <h3 class="font-bold text-lg text-stone-800">🔍 신규 가맹점 검토 및 예외 수정</h3>
+            <p class="text-xs text-stone-500">구글 시트 Rules에 없는 신규 가맹점입니다. 명의자(용이/갱이)를 확인 후 반영해 주세요.</p>
+            <div id="reviewList" class="space-y-3 max-h-72 overflow-y-auto pr-1"></div>
+            <div class="flex justify-end pt-3">
+                <button type="button" onclick="confirmReviewAndSave()" class="px-5 py-2.5 text-sm bg-stone-700 hover:bg-stone-800 text-white font-semibold rounded-xl shadow-sm">
+                    확인 및 대시보드 반영
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        let currentYearMonth = "2026-09";
+        let dbTransactions = {};
+        let smartAutoRules = []; // 구글 시트 Rules 탭에서 동적으로 로드
+        let pendingReviewItems = [];
+
+        // 배포하신 구글 앱스 스크립트 웹앱 URL 입력
+        const GAS_WEB_APP_URL = "여기에_구글_앱스_스크립트_웹앱_URL_입력";
+
+        window.onload = function() {
+            // 앱 실행 시 구글 시트에서 데이터 및 규칙 로드 (연동 후 주석 해제)
+            // loadDataFromGoogleSheet();
+            
+            // 임시 테스트용 렌더링
+            renderAll();
+            initCharts();
+        };
+
+        // 구글 시트에서 Transactions와 Rules를 한 번에 불러오는 함수
+        async function loadDataFromGoogleSheet() {
+            try {
+                let response = await fetch(GAS_WEB_APP_URL);
+                let data = await response.json();
+
+                // 1. Rules 탭 데이터 동적 탑재
+                smartAutoRules = data.rules;
+
+                // 2. Transactions 데이터를 연월별로 분류
+                dbTransactions = {};
+                data.transactions.forEach(t => {
+                    let ym = String(t.date).substring(0, 7);
+                    if (!dbTransactions[ym]) dbTransactions[ym] = [];
+                    dbTransactions[ym].push(t);
+                });
+
+                renderAll();
+                updateChartsData();
+            } catch (error) {
+                console.error("데이터 로드 실패:", error);
+            }
+        }
+
+        function switchTab(tabId) {
+            document.getElementById('view-dashboard').classList.toggle('hidden', tabId !== 'dashboard');
+            document.getElementById('view-comparison').classList.toggle('hidden', tabId !== 'comparison');
+            
+            document.getElementById('tab-dashboard').className = tabId === 'dashboard' 
+                ? 'pb-3 font-bold text-stone-700 border-b-2 border-stone-700 transition flex items-center gap-2 text-sm sm:text-base'
+                : 'pb-3 font-medium text-stone-400 hover:text-stone-700 transition flex items-center gap-2 text-sm sm:text-base';
+                
+            document.getElementById('tab-comparison').className = tabId === 'comparison' 
+                ? 'pb-3 font-bold text-stone-700 border-b-2 border-stone-700 transition flex items-center gap-2 text-sm sm:text-base'
+                : 'pb-3 font-medium text-stone-400 hover:text-stone-700 transition flex items-center gap-2 text-sm sm:text-base';
+
+            if(tabId === 'comparison') {
+                updateChartsData();
+                renderMerchantComparisonTable();
+            }
+        }
+
+        function navigateMonth(direction) {
+            let [y, m] = currentYearMonth.split('-').map(Number);
+            m += direction;
+            if(m > 12) { m = 1; y++; }
+            if(m < 1) { m = 12; y--; }
+            currentYearMonth = `${y}-${String(m).padStart(2, '0')}`;
+            renderAll();
+        }
+
+        // 이미지 업로드 및 구글 시트 Rules 참조 자동 배정 프로세스
+        function handleCaptureUpload(event) {
+            let files = event.target.files;
+            if (!files || files.length === 0) return;
+
+            let container = document.getElementById('uploadStatusContainer');
+            let statusList = document.getElementById('statusList');
+            container.classList.remove('hidden');
+            statusList.innerHTML = '';
+
+            let samplePool = [
+                { name: "스타벅스 강남점", card: "현대카드", cardGuessUser: "용이", amt: 18000 },
+                { name: "이마트 역삼점", card: "신한카드", cardGuessUser: "갱이", amt: 89000 },
+                { name: "처음보는 성수소품샵", card: "국민카드", cardGuessUser: "기타", amt: 35000 }
+            ];
+
+            pendingReviewItems = [];
+
+            Array.from(files).forEach((file, index) => {
+                let statusId = `status-item-${index}`;
+                statusList.innerHTML += `
+                    <div id="${statusId}" class="flex items-center justify-between p-3 bg-white rounded-xl border border-stone-200 text-xs sm:text-sm shadow-sm">
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <span class="animate-spin text-stone-600">⏳</span>
+                            <span class="font-medium text-stone-700 truncate">${file.name}</span>
+                        </div>
+                        <span class="text-stone-600 font-semibold shrink-0">분석 중...</span>
+                    </div>
+                `;
+
+                setTimeout(() => {
+                    let parsed = samplePool[Math.floor(Math.random() * samplePool.length)];
+                    
+                    // 🌟 핵심: 구글 시트 Rules에서 가져온 smartAutoRules 동적 참조 매칭
+                    let matchedRule = smartAutoRules.find(rule => parsed.name.includes(rule.keyword));
+
+                    if (matchedRule) {
+                        // [자동 배정 성공] 시트 규칙에 있으므로 모달 없이 즉시 반영
+                        if(!dbTransactions[currentYearMonth]) dbTransactions[currentYearMonth] = [];
+                        let newTx = {
+                            date: "2026-09-28 21:10",
+                            card: parsed.card,
+                            user: matchedRule.user,
+                            merchant: parsed.name,
+                            category: matchedRule.category,
+                            amount: parsed.amt
+                        };
+                        dbTransactions[currentYearMonth].unshift(newTx);
+
+                        // 구글 시트(Transactions)에 백그라운드 POST 저장 요청
+                        saveTransactionToGoogleSheet(newTx);
+
+                        let itemEl = document.getElementById(statusId);
+                        if(itemEl) {
+                            itemEl.className = "flex items-center justify-between p-3 bg-stone-100 rounded-xl border border-stone-200 text-xs sm:text-sm shadow-sm";
+                            itemEl.innerHTML = `<span class="text-stone-700">⚡ [시트규칙 자동배정] ${parsed.name} (${matchedRule.user})</span>`;
+                        }
+                    } else {
+                        // [신규 항목] 시트 규칙에 없으므로 검토 대기열에 추가
+                        pendingReviewItems.push({
+                            date: "2026-09-28 21:10",
+                            card: parsed.card,
+                            user: parsed.cardGuessUser,
+                            merchant: parsed.name,
+                            category: "기타",
+                            amount: parsed.amt
+                        });
+
+                        let itemEl = document.getElementById(statusId);
+                        if(itemEl) {
+                            itemEl.className = "flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs sm:text-sm shadow-sm";
+                            itemEl.innerHTML = `<span class="text-amber-800">🔍 [신규 가맹점 감지] ${parsed.name} - 확인 필요</span>`;
+                        }
+                    }
+
+                    renderAll();
+
+                    if(index === files.length - 1 && pendingReviewItems.length > 0) {
+                        setTimeout(() => { openReviewModal(); }, 500);
+                    }
+                }, (index + 1) * 1000);
+            });
+            event.target.value = '';
+        }
+
+        // 구글 시트에 데이터 POST 전송 함수
+        async function saveTransactionToGoogleSheet(txData) {
+            if (GAS_WEB_APP_URL.includes("여기에")) return;
+            try {
+                await fetch(GAS_WEB_APP_URL, {
+                    method: "POST",
+                    body: JSON.stringify(txData)
+                });
+            } catch (e) {
+                console.error("시트 저장 전송 오류:", e);
+            }
+        }
+
+        function openReviewModal() {
+            let listEl = document.getElementById('reviewList');
+            let html = '';
+            pendingReviewItems.forEach((item, idx) => {
+                html += `
+                    <div class="p-3 bg-stone-50 rounded-2xl border border-stone-200 space-y-2">
+                        <div class="flex justify-between items-center text-xs text-stone-500">
+                            <span>${item.date}</span>
+                            <span class="font-bold text-stone-700">${item.card}</span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <input type="text" id="rev-merchant-${idx}" value="${item.merchant}" class="bg-white border border-stone-200 rounded-lg px-2 py-1 text-xs font-semibold text-stone-800">
+                            <select id="rev-user-${idx}" class="bg-white border border-stone-200 rounded-lg px-2 py-1 text-xs font-semibold text-stone-800">
+                                <option value="용이" ${item.user==='용이'?'selected':''}>용이(남편)</option>
+                                <option value="갱이" ${item.user==='갱이'?'selected':''}>갱이(아내)</option>
+                                <option value="기타" ${item.user==='기타'?'selected':''}>기타/공동</option>
+                            </select>
+                            <input type="number" id="rev-amount-${idx}" value="${item.amount}" class="bg-white border border-stone-200 rounded-lg px-2 py-1 text-xs font-semibold text-right text-stone-800">
+                        </div>
+                    </div>
+                `;
+            });
+            listEl.innerHTML = html;
+            document.getElementById('reviewModal').classList.remove('hidden');
+            document.getElementById('reviewModal').classList.add('flex');
+        }
+
+        function confirmReviewAndSave() {
+            pendingReviewItems.forEach((item, idx) => {
+                let m = document.getElementById(`rev-merchant-${idx}`).value;
+                let u = document.getElementById(`rev-user-${idx}`).value;
+                let a = parseInt(document.getElementById(`rev-amount-${idx}`).value) || 0;
+
+                if(!dbTransactions[currentYearMonth]) dbTransactions[currentYearMonth] = [];
+                let finalTx = {
+                    date: item.date,
+                    card: item.card,
+                    user: u,
+                    merchant: m,
+                    category: item.category,
+                    amount: a
+                };
+                dbTransactions[currentYearMonth].unshift(finalTx);
+                saveTransactionToGoogleSheet(finalTx);
+            });
+
+            pendingReviewItems = [];
+            document.getElementById('reviewModal').classList.remove('flex');
+            document.getElementById('reviewModal').classList.add('hidden');
+            renderAll();
+            alert('신규 내역이 검토되어 대시보드 및 시트에 반영되었습니다!');
+        }
+
+        function renderAll() {
+            let [y, m] = currentYearMonth.split('-');
+            document.getElementById('currentMonthDisplay').innerText = `${y}년 ${parseInt(m)}월`;
+
+            let txs = dbTransactions[currentYearMonth] || [];
+
+            let total = 0, yongTotal = 0, gaengTotal = 0;
+            let cardTotals = {};
+
+            txs.forEach(t => {
+                total += t.amount;
+                if(t.user === '용이') yongTotal += t.amount;
+                else if(t.user === '갱이') gaengTotal += t.amount;
+
+                if(!cardTotals[t.card]) cardTotals[t.card] = 0;
+                cardTotals[t.card] += t.amount;
+            });
+
+            let settlementText = `갱이가 용이에게 <br/><span class="text-lg font-extrabold underline">${gaengTotal.toLocaleString()}원</span> 보낼 금액 필요`;
+
+            document.getElementById('totalSpend').innerText = total.toLocaleString() + '원';
+            document.getElementById('yongSpend').innerText = yongTotal.toLocaleString() + '원';
+            document.getElementById('gaengSpend').innerText = gaengTotal.toLocaleString() + '원';
+            document.getElementById('settlementResult').innerHTML = settlementText;
+
+            let cardHtml = '';
+            for(let [card, amt] of Object.entries(cardTotals)) {
+                let p = total > 0 ? Math.round((amt / total) * 100) : 0;
+                cardHtml += `
+                    <div class="p-3 bg-stone-50 rounded-xl space-y-1">
+                        <div class="flex justify-between text-sm font-semibold text-stone-700">
+                            <span>${card}</span>
+                            <span>${amt.toLocaleString()}원 (${p}%)</span>
+                        </div>
+                        <div class="w-full bg-stone-200 h-1.5 rounded-full overflow-hidden">
+                            <div class="bg-stone-600 h-full rounded-full" style="width: ${p}%"></div>
+                        </div>
+                    </div>
+                `;
+            }
+            if(Object.keys(cardTotals).length === 0) cardHtml = '<p class="text-xs text-stone-400 text-center py-4">내역이 없습니다.</p>';
+            document.getElementById('cardCompanyList').innerHTML = cardHtml;
+
+            let tbody = document.getElementById('transactionTableBody');
+            let tHtml = '';
+            txs.forEach((t, index) => {
+                let badge = t.user === '용이' ? 'bg-sky-50 text-sky-700' : (t.user === '갱이' ? 'bg-amber-50 text-amber-700' : 'bg-stone-100 text-stone-600');
+                tHtml += `
+                    <tr class="hover:bg-stone-50/50 transition">
+                        <td class="py-3 px-2 text-xs text-stone-400">${t.date}</td>
+                        <td class="py-3 px-2">
+                            <span class="font-semibold text-stone-700">${t.card}</span>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded font-bold ml-1 ${badge}">${t.user}</span>
+                        </td>
+                        <td class="py-3 px-2 font-medium text-stone-800">${t.merchant}</td>
+                        <td class="py-3 px-2"><span class="text-xs bg-stone-100 text-stone-600 px-2 py-1 rounded-lg">${t.category}</span></td>
+                        <td class="py-3 px-2 text-right font-bold text-stone-900">${t.amount.toLocaleString()}원</td>
+                        <td class="py-3 px-2 text-center space-x-1">
+                            <button onclick="editTransaction(${index})" class="text-xs bg-stone-100 hover:bg-stone-200 text-stone-700 px-2 py-1 rounded-md transition font-medium">수정</button>
+                            <button onclick="deleteTransaction(${index})" class="text-xs bg-rose-50 hover:bg-rose-100 text-rose-600 px-2 py-1 rounded-md transition font-medium">삭제</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            if(txs.length === 0) tHtml = `<tr><td colspan="6" class="py-6 text-center text-stone-400 text-sm">해당 월 내역이 없습니다.</td></tr>`;
+            tbody.innerHTML = tHtml;
+
+            let gaengTbody = document.getElementById('gaengTransactionTableBody');
+            let gaengHtml = '';
+            let gaengTxs = txs.filter(t => t.user === '갱이');
+            gaengTxs.forEach(t => {
+                gaengHtml += `
+                    <tr class="hover:bg-stone-50/50 transition">
+                        <td class="py-3 px-2 text-xs text-stone-400">${t.date}</td>
+                        <td class="py-3 px-2 font-medium text-stone-700">${t.card}</td>
+                        <td class="py-3 px-2 font-medium text-stone-800">${t.merchant}</td>
+                        <td class="py-3 px-2"><span class="text-xs bg-amber-50 text-amber-700 px-2 py-1 rounded-lg">${t.category}</span></td>
+                        <td class="py-3 px-2 text-right font-bold text-amber-700">${t.amount.toLocaleString()}원</td>
+                    </tr>
+                `;
+            });
+            if(gaengTxs.length === 0) gaengHtml = `<tr><td colspan="5" class="py-6 text-center text-stone-400 text-sm">이번 달 갱이 사용 내역이 없습니다.</td></tr>`;
+            gaengTbody.innerHTML = gaengHtml;
+
+            renderMonthlySummaryTable();
+            updateChartsData();
+            renderMerchantComparisonTable();
+        }
+
+        function renderMonthlySummaryTable() {
+            let mBody = document.getElementById('monthlySummaryTableBody');
+            let html = '';
+            let sortedYMs = Object.keys(dbTransactions).sort().reverse().slice(0, 3);
+
+            sortedYMs.forEach(ym => {
+                let txs = dbTransactions[ym] || [];
+                let tot = txs.reduce((acc, cur) => acc + cur.amount, 0);
+                let yong = txs.filter(t => t.user === '용이').reduce((acc, cur) => acc + cur.amount, 0);
+                let gaeng = txs.filter(t => t.user === '갱이').reduce((acc, cur) => acc + cur.amount, 0);
+                let [y, m] = ym.split('-');
+
+                html += `
+                    <tr class="hover:bg-stone-50/50 transition">
+                        <td class="py-3 px-3 font-semibold text-stone-700">${y}년 ${parseInt(m)}월</td>
+                        <td class="py-3 px-3 font-bold">${tot.toLocaleString()}원</td>
+                        <td class="py-3 px-3 text-sky-700 font-medium">${yong.toLocaleString()}원</td>
+                        <td class="py-3 px-3 text-amber-700 font-medium">${gaeng.toLocaleString()}원</td>
+                        <td class="py-3 px-3 text-right"><span class="bg-stone-100 text-stone-700 text-xs px-2.5 py-1 rounded-full font-medium">정산완료</span></td>
+                    </tr>
+                `;
+            });
+            mBody.innerHTML = html;
+        }
+
+        function renderMerchantComparisonTable() {
+            let sortedYMs = Object.keys(dbTransactions).sort().slice(-3);
+            let headerEl = document.getElementById('merchantTableHeader');
+            let bodyEl = document.getElementById('merchantTableBody');
+
+            let headerHtml = `<th class="py-3 px-3">실제 사용처 (가맹점)</th>`;
+            sortedYMs.forEach(ym => {
+                let [y, m] = ym.split('-');
+                headerHtml += `<th class="py-3 px-3 text-right">${parseInt(m)}월</th>`;
+            });
+            headerEl.innerHTML = headerHtml;
+
+            let merchantsSet = new Set();
+            sortedYMs.forEach(ym => {
+                let txs = dbTransactions[ym] || [];
+                txs.forEach(t => merchantsSet.add(t.merchant));
+            });
+            let merchants = Array.from(merchantsSet);
+
+            let bodyHtml = '';
+            merchants.forEach(merchant => {
+                bodyHtml += `<tr class="hover:bg-stone-50/50 transition">`;
+                bodyHtml += `<td class="py-3 px-3 font-bold text-stone-800">${merchant}</td>`;
+
+                sortedYMs.forEach(ym => {
+                    let txs = dbTransactions[ym] || [];
+                    let sum = txs.filter(t => t.merchant === merchant).reduce((acc, cur) => acc + cur.amount, 0);
+                    let displayVal = sum > 0 ? sum.toLocaleString() + '원' : '-';
+                    bodyHtml += `<td class="py-3 px-3 text-right font-medium text-stone-600">${displayVal}</td>`;
+                });
+
+                bodyHtml += `</tr>`;
+            });
+
+            if(merchants.length === 0) {
+                bodyHtml = `<tr><td colspan="${sortedYMs.length + 1}" class="py-6 text-center text-stone-400 text-sm">비교할 사용처 내역이 없습니다.</td></tr>`;
+            }
+            bodyEl.innerHTML = bodyHtml;
+        }
+
+        function copySettlementToClipboard() {
+            let [y, m] = currentYearMonth.split('-');
+            let txs = dbTransactions[currentYearMonth] || [];
+            let gaengTxs = txs.filter(t => t.user === '갱이');
+            let gaengTotal = gaengTxs.reduce((acc, cur) => acc + cur.amount, 0);
+
+            let text = `💳 [${y}년 ${parseInt(m)}월 카드 정산 내역]\n`;
+            text += `👉 갱이가 용이에게 보낼 금액: ${gaengTotal.toLocaleString()}원 필요\n\n`;
+            text += `[갱이 사용 상세 내역]\n`;
+            if(gaengTxs.length > 0) {
+                gaengTxs.forEach(t => {
+                    text += `- ${t.date.substring(5,10)} | ${t.card} | ${t.merchant} | ${t.amount.toLocaleString()}원\n`;
+                });
+            } else {
+                text += `내역 없음\n`;
+            }
+
+            navigator.clipboard.writeText(text).then(() => {
+                alert('카카오톡 전송용 정산 내용이 클립보드에 복사되었습니다!');
+            });
+        }
+
+        function openAddModal() {
+            document.getElementById('modalTitle').innerText = "수동 거래 내역 추가";
+            document.getElementById('editIndex').value = "-1";
+            document.getElementById('inputDate').value = "2026-09-28 20:00";
+            document.getElementById('inputMerchant').value = "";
+            document.getElementById('inputAmount').value = "";
+            document.getElementById('addModal').classList.remove('hidden');
+            document.getElementById('addModal').classList.add('flex');
+        }
+
+        function editTransaction(index) {
+            let txs = dbTransactions[currentYearMonth] || [];
+            let t = txs[index];
+            if(!t) return;
+
+            document.getElementById('modalTitle').innerText = "거래 내역 수정";
+            document.getElementById('editIndex').value = index;
+            document.getElementById('inputDate').value = t.date;
+            document.getElementById('inputCard').value = t.card;
+            document.getElementById('inputUser').value = t.user;
+            document.getElementById('inputMerchant').value = t.merchant;
+            document.getElementById('inputAmount').value = t.amount;
+            document.getElementById('inputCategory').value = t.category;
+
+            document.getElementById('addModal').classList.remove('hidden');
+            document.getElementById('addModal').classList.add('flex');
+        }
+
+        function closeAddModal() {
+            document.getElementById('addModal').classList.remove('flex');
+            document.getElementById('addModal').classList.add('hidden');
+        }
+
+        function saveTransaction(e) {
+            e.preventDefault();
+            let editIndex = parseInt(document.getElementById('editIndex').value);
+            let date = document.getElementById('inputDate').value;
+            let card = document.getElementById('inputCard').value;
+            let user = document.getElementById('inputUser').value;
+            let merchant = document.getElementById('inputMerchant').value;
+            let amount = parseInt(document.getElementById('inputAmount').value);
+            let category = document.getElementById('inputCategory').value;
+
+            if(!dbTransactions[currentYearMonth]) dbTransactions[currentYearMonth] = [];
+
+            let txObj = { date, card, user, merchant, category, amount };
+
+            if(editIndex === -1) {
+                dbTransactions[currentYearMonth].unshift(txObj);
+                saveTransactionToGoogleSheet(txObj);
+                alert('내역이 추가되었습니다!');
+            } else {
+                dbTransactions[currentYearMonth][editIndex] = txObj;
+                alert('내역이 수정되었습니다!');
+            }
+
+            closeAddModal();
+            renderAll();
+        }
+
+        function deleteTransaction(index) {
+            if(confirm('정말 이 내역을 삭제하시겠습니까?')) {
+                dbTransactions[currentYearMonth].splice(index, 1);
+                renderAll();
+            }
+        }
+
+        function initCharts() {
+            let sortedYMs = Object.keys(dbTransactions).sort();
+            let labels = sortedYMs.map(ym => {
+                let [y, m] = ym.split('-');
+                return `${parseInt(m)}월`;
+            });
+
+            let yongData = sortedYMs.map(ym => (dbTransactions[ym]||[]).filter(t => t.user === '용이').reduce((acc, cur) => acc + cur.amount, 0));
+            let gaengData = sortedYMs.map(ym => (dbTransactions[ym]||[]).filter(t => t.user === '갱이').reduce((acc, cur) => acc + cur.amount, 0));
+
+            let ctxU = document.getElementById('userCompareChart').getContext('2d');
+            userCompareChart = new Chart(ctxU, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: '용이', data: yongData, backgroundColor: '#38bdf8', borderRadius: 8 },
+                        { label: '갱이', data: gaengData, backgroundColor: '#fbbf24', borderRadius: 8 }
+                    ]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { position: 'bottom' } }, 
+                    scales: { 
+                        x: { grid: { display: false } }, 
+                        y: { grid: { color: '#f5f5f4' }, beginAtZero: true } 
+                    } 
+                }
+            });
+
+            let ctxP = document.getElementById('categoryPieChart').getContext('2d');
+            categoryPieChart = new Chart(ctxP, {
+                type: 'doughnut',
+                data: {
+                    labels: ['식비/카페', '쇼핑/마트', '교통/주유', '의료/생활', '기타'],
+                    datasets: [{ data: [0,0,0,0,0], backgroundColor: ['#78716c', '#d97706', '#0ea5e9', '#10b981', '#cbd5e1'] }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+
+        function updateChartsData() {
+            let txs = dbTransactions[currentYearMonth] || [];
+            let catMap = { '식비/카페': 0, '쇼핑/마트': 0, '교통/주유': 0, '의료/생활': 0, '기타': 0 };
+            txs.forEach(t => {
+                if(catMap[t.category] !== undefined) catMap[t.category] += t.amount;
+                else catMap['기타'] += t.amount;
+            });
+            if(categoryPieChart) {
+                categoryPieChart.data.datasets[0].data = Object.values(catMap);
+                categoryPieChart.update();
+            }
+
+            let sortedYMs = Object.keys(dbTransactions).sort();
+            let labels = sortedYMs.map(ym => { let [y, m] = ym.split('-'); return `${parseInt(m)}월`; });
+            let yongData = sortedYMs.map(ym => (dbTransactions[ym]||[]).filter(t => t.user === '용이').reduce((acc, cur) => acc + cur.amount, 0));
+            let gaengData = sortedYMs.map(ym => (dbTransactions[ym]||[]).filter(t => t.user === '갱이').reduce((acc, cur) => acc + cur.amount, 0));
+
+            if(userCompareChart) {
+                userCompareChart.data.labels = labels;
+                userCompareChart.data.datasets[0].data = yongData;
+                userCompareChart.data.datasets[1].data = gaengData;
+                userCompareChart.update();
+            }
+        }
+    </script>
+</body>
+</html>
