@@ -41,7 +41,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .empty{padding:30px 10px;text-align:center;color:var(--mut)}
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:8px;opacity:0;transition:.2s;pointer-events:none}
 #toast.on{opacity:1}
-.f label{display:flex;gap:6px;align-items:center}.f label input{padding:0}</style></head><body>
+.f label{display:flex;gap:6px;align-items:center}.f label input{padding:0}.dd{margin:-4px 0 10px;color:var(--mut);font-size:13px}.dd b{color:var(--ink)}.stp{display:flex;gap:8px;align-items:center;padding:5px 0}.stp small{margin-left:auto;color:var(--mut)}.ck{width:22px;height:22px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;font-size:12px;flex:none}.ck.ok{background:var(--ink);color:#fff;border-color:var(--ink)}[data-sp]{cursor:pointer}</style></head><body>
 <nav><button data-t="m">이번 달 정산</button><button data-t="r">고정비규칙</button><button data-t="s">누적통계</button><button class="gear" id="gear" aria-label="연결 설정">⚙</button></nav>
 <main id="v"><div class="empty">불러오는 중…</div></main><div id="toast"></div>
 <script>
@@ -56,7 +56,7 @@ async function load(){
   try{r=await(await fetch(c.u+'?token='+encodeURIComponent(c.t))).json();if(r.error)throw new Error('비밀번호(TOKEN)가 Code.gs와 달라요')}
   catch(e){const m=e.name==='SyntaxError'?'응답이 올바르지 않아요. 웹앱 액세스 권한이 "모든 사용자"인지, 시트에서 연 Apps Script인지 확인하세요':e.name==='TypeError'?'주소에 접근할 수 없어요. /exec 주소인지, 권한 승인과 재배포를 확인하세요':e.message;
     $('#v').innerHTML='<div class="empty">시트에 연결하지 못했어요.<br><b>'+esc(m)+'</b><br><br><button class="btn" onclick="setup()">연결 설정</button></div>';return}
-  S.rows=r.rows.map(x=>({...x,m:x.d.slice(0,7),day:x.d.slice(8,10)}));S.rules=r.rules;S.paid=r.paid;
+  S.rows=r.rows.map(x=>({...x,m:x.d.slice(0,7),day:x.d.slice(8,10)}));S.rules=r.rules;S.paid=r.paid;S.closed=r.closed||{};S.cfg=r.cfg||{};
   const ms=months();if(!S.m||!ms.includes(S.m)){const now=new Date().toISOString().slice(0,7);S.m=ms.includes(now)?now:ms[0]||''}
   try{render()}catch(e){$('#v').innerHTML='<div class="empty">화면 오류: '+esc(e.message)+'</div>'}
 }
@@ -64,35 +64,48 @@ function setup(){const u=prompt('Apps Script 웹앱 주소',cfg().u);if(u===null
 const bad=x=>!/^\d{4}-\d{2}/.test(x.d)||x.day==='00'||+x.d.slice(0,4)<YR-1;
 const months=()=>[...new Set(S.rows.filter(x=>!bad(x)||/^\d{4}-\d{2}/.test(x.d)&&+x.d.slice(0,4)>=YR-1).map(x=>x.m))].sort().reverse();
 const isFix=x=>S.rules.some(r=>r.fix&&x.shop.toLowerCase().includes(r.keyword.toLowerCase()));
-function sum(m){const rs=S.rows.filter(x=>x.m===m);let t=0,fx=0,gg=0;rs.forEach(x=>{t+=x.amt;if(isFix(x))fx+=x.amt;else if(x.user==='갱이')gg+=x.amt});return{rs,t,fx,gg,yy:t-gg}}
+const kx=x=>x.d+'|'+x.shop+'|'+x.amt,sp=x=>{const c=S.cfg[kx(x)];return c&&c.s!=null?+c.s:null},gShare=x=>{const s=sp(x);return s!=null?Math.round(x.amt*s/100):(x.user==='갱이'?x.amt:0)};
+const unm=()=>[...new Set(S.rows.filter(x=>!bad(x)&&!S.rules.some(r=>x.shop.toLowerCase().includes(r.keyword.toLowerCase()))).map(x=>x.shop.replace(/\s*[\(\|].*$/,'').trim()))].slice(0,10);
+const dday=()=>{const n=new Date(),y=n.getFullYear(),o=n.getMonth();const t=new Date(y,n.getDate()>14?o+1:o,14);return{d:Math.round((t-new Date(y,o,n.getDate()))/864e5),l:(t.getMonth()+1)+'/14'}};
+function sum(m){const rs=S.rows.filter(x=>x.m===m);let t=0,fx=0,gg=0;rs.forEach(x=>{t+=x.amt;if(isFix(x))fx+=x.amt;else gg+=gShare(x)});return{rs,t,fx,gg,yy:t-gg}}
 function issues(){const o=[],g={};S.rows.forEach(x=>{(g[x.shop+'|'+x.amt]=g[x.shop+'|'+x.amt]||[]).push(x)});
   S.rows.forEach(x=>{const grp=g[x.shop+'|'+x.amt];let w='';
     if(bad(x))w=(+x.d.slice(0,4)<YR-1?'연도 이상':'일자 누락');
     if(grp.length>1&&(bad(x)||grp.some(y=>y!==x&&y.d===x.d)))w+=(w?' · ':'')+'중복 의심';
-    if(w)o.push({x,w})});return o}
+    if(w)o.push({x,w})});return o.filter(q=>!(S.cfg[kx(q.x)]||{}).i)}
 const mm=d=>(+d.slice(5,7))+'/'+(d.slice(8,10)==='00'?'?':+d.slice(8,10));
 const nextMon=m=>{const[y,n]=m.split('-').map(Number);return(n%12+1)+'/14'};
-function kakao(m){const s=sum(m),n=+m.slice(5);const l=s.rs.filter(x=>x.user==='갱이'&&!isFix(x)).sort((a,b)=>a.d<b.d?-1:1);
-  return`[${n}월 카드 정산]\n갱이 입금액: ${fmt(s.gg)}원\n${nextMon(m)} 인출 예정 · 용이 계좌로 입금 부탁해요\n\n`+l.map(x=>`${mm(x.d)} ${x.shop} ${fmt(x.amt)}`).join('\n')}
+function kakao(m){const s=sum(m),n=+m.slice(5);const l=s.rs.filter(x=>!isFix(x)&&gShare(x)!==0).sort((a,b)=>a.d<b.d?-1:1);
+  return`[${n}월 카드 정산]\n갱이 입금액: ${fmt(s.gg)}원\n${nextMon(m)} 인출 예정 · 용이 계좌로 입금 부탁해요\n\n`+l.map(x=>`${mm(x.d)} ${x.shop} ${fmt(gShare(x))}${sp(x)!=null?' ('+fmt(x.amt)+'의 '+sp(x)+'%)':''}`).join('\n')}
 function copy(t){(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).catch(()=>{const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove()}).then?.(()=>{});toast('복사했어요. 카톡에 붙여넣으세요')}
 function render(){document.querySelectorAll('nav button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===S.tab));({m:vM,r:vR,s:vS})[S.tab]()}
 function vM(){const ms=months();if(!S.m)return $('#v').innerHTML='<div class="empty">시트에 내역이 없어요.</div>';
-  const s=sum(S.m),is=issues(),i=ms.indexOf(S.m);
+  const s=sum(S.m),is=issues(),un=unm(),i=ms.indexOf(S.m),cl=!!S.closed[S.m],pd=!!S.paid[S.m],dd=dday(),pm=ms[i+1],pc={},cc={},ct=x=>x.cat||'기타',bs='padding:3px 10px;font-size:12px';
+  if(pm)sum(pm).rs.forEach(x=>pc[ct(x)]=(pc[ct(x)]||0)+x.amt);s.rs.forEach(x=>cc[ct(x)]=(cc[ct(x)]||0)+x.amt);
+  const up=pm?Object.keys(cc).filter(k=>cc[k]-(pc[k]||0)>=50000&&cc[k]>=(pc[k]||0)*1.5).map(k=>k+' +'+fmt(cc[k]-(pc[k]||0))):[];
   let rs=s.rs.slice().sort((a,b)=>a.d<b.d?1:-1);
   if(S.f==='용이'||S.f==='갱이')rs=rs.filter(x=>x.user===S.f);if(S.f==='fix')rs=rs.filter(isFix);
+  const st=[['① 데이터 점검',is.length?is.length+'건 처리 필요':'완료',!is.length],['② 규칙 없는 가맹점',un.length?un.length+'곳 → 고정비규칙 탭':'없음',!un.length],['③ 갱이에게 입금 요청','아래 [카톡용 복사]',pd],['④ 입금 확인',pd?'완료':'입금되면 체크',pd],['⑤ 월 마감',cl?'마감됨':'①~④ 후 마감',cl]];
   $('#v').innerHTML=`<div class="bar"><button class="ib" id="pv" aria-label="이전 달" ${i>=ms.length-1?'disabled':''}>◀</button><select id="ms">${ms.map(m=>`<option ${m===S.m?'selected':''} value="${m}">${m.slice(0,4)}년 ${+m.slice(5)}월 사용분</option>`).join('')}</select><button class="ib" id="nx" aria-label="다음 달" ${i<=0?'disabled':''}>▶</button></div>
+  <div class="dd">결제일 ${dd.l} · <b>${dd.d?'D-'+dd.d:'D-DAY'}</b> · 시트 입력 마감은 13일</div>
   <div class="grid"><div style="--k:var(--ink)"><small>총 인출</small><b>${fmt(s.t)}</b></div><div style="--k:var(--yong)"><small>용이 부담</small><b>${fmt(s.yy)}</b></div><div style="--k:var(--gaeng)"><small>갱이 부담</small><b>${fmt(s.gg)}</b></div><div style="--k:var(--fix)"><small>고정비</small><b>${fmt(s.fx)}</b></div></div>
-  <div class="slip"><h2>갱이 입금 요청</h2><div class="amt">${fmt(s.gg)}원</div><p>${nextMon(S.m)} 인출 · 고정비는 제외한 갱이 사용분</p>
-  <div class="row"><button class="btn" id="cp">카톡용 복사</button><label><input type="checkbox" id="pd" ${S.paid[S.m]?'checked':''}>입금 확인</label></div></div>
-  ${is.length?`<div class="warn"><b>데이터 점검 ${is.length}건</b> · 13일 전에 시트에서 고쳐 주세요${is.slice(0,8).map(o=>`<div>${esc(o.x.d)} ${esc(o.x.shop)} ${fmt(o.x.amt)} → ${o.w}<br><button class="btn sub" style="padding:3px 10px;font-size:12px" data-e="${o.x.r}">날짜 수정</button> <button class="btn sub" style="padding:3px 10px;font-size:12px" data-x="${o.x.r}">행 삭제</button></div>`).join('')}</div>`:''}
+  <div class="box"><h3>정산 순서 ${cl?'🔒':''}</h3>${st.map(a=>`<div class="stp"><span class="ck ${a[2]?'ok':''}">${a[2]?'✓':''}</span><span>${a[0]}</span><small>${a[1]}</small></div>`).join('')}<p style="margin:8px 0 0"><button class="btn sub" id="cl">${cl?'마감 해제':'월 마감'}</button></p></div>
+  ${is.length&&!cl?`<div class="warn"><b>① 데이터 점검 ${is.length}건</b> · 하나씩 처리하면 단계가 완료돼요<div>중복·잘못 읽힌 행은 <b>삭제</b>, 날짜만 틀렸으면 <b>날짜 수정</b>, 실제로 맞는 내역이면 <b>문제 없음</b></div>${is.slice(0,8).map(o=>`<div>${esc(o.x.d)} ${esc(o.x.shop)} ${fmt(o.x.amt)} → ${o.w}<br><button class="btn sub" style="${bs}" data-e="${o.x.r}">날짜 수정</button> <button class="btn sub" style="${bs}" data-x="${o.x.r}">행 삭제</button> <button class="btn sub" style="${bs}" data-i="${esc(kx(o.x))}">문제 없음</button></div>`).join('')}</div>`:''}
+  <div class="slip"><h2>③ 갱이 입금 요청</h2><div class="amt">${fmt(s.gg)}원</div><p>${nextMon(S.m)} 인출 · 고정비 제외, 분담비율 반영</p>
+  <div class="row"><button class="btn" id="cp">카톡용 복사</button><label><input type="checkbox" id="pd" ${pd?'checked':''} ${cl?'disabled':''}>④ 입금 확인</label></div></div>
+  ${up.length?`<div class="warn"><b>지난달보다 크게 늘어난 항목</b><div>${up.map(esc).join(' · ')}</div></div>`:''}
   <div class="chips">${[['all','전체'],['용이','용이'],['갱이','갱이'],['fix','고정비']].map(([k,l])=>`<button data-f="${k}" class="${S.f===k?'on':''}">${l}</button>`).join('')}</div>
-  ${rs.map(x=>{const f=isFix(x);return`<div class="item"><span class="dt">${mm(x.d)}</span><div class="nm"><span>${esc(x.shop)}</span><small><span class="tag ${f?'f':x.user==='갱이'?'g':'y'}" style="display:inline">${f?'고정':esc(x.user)}</span>${esc(x.cat||'')}</small></div><span class="am ${x.amt<0?'neg':''}">${fmt(x.amt)}</span></div>`}).join('')||'<div class="empty">내역이 없어요.</div>'}`;
+  <small style="color:var(--mut)">${cl?'':'공통 비용은 내역을 눌러 갱이 부담 비율을 지정하세요'}</small>
+  ${rs.map(x=>{const f=isFix(x),p=sp(x);return`<div class="item" ${f||cl?'':'data-sp="'+esc(kx(x))+'"'}><span class="dt">${mm(x.d)}</span><div class="nm"><span>${esc(x.shop)}</span><small><span class="tag ${f?'f':x.user==='갱이'?'g':'y'}">${f?'고정':esc(x.user)}</span>${p!=null?'<span class="tag g">갱이 '+p+'%</span>':''}${esc(x.cat||'')}</small></div><span class="am ${x.amt<0?'neg':''}">${fmt(x.amt)}</span></div>`}).join('')||'<div class="empty">내역이 없어요.</div>'}`;
   $('#ms').onchange=e=>{S.m=e.target.value;vM()};$('#pv').onclick=()=>{S.m=ms[i+1];vM()};$('#nx').onclick=()=>{S.m=ms[i-1];vM()};
   $('#cp').onclick=()=>copy(kakao(S.m));
-  $('#pd').onchange=async e=>{S.paid[S.m]=e.target.checked;await post({action:'setPaid',month:S.m,paid:e.target.checked});toast(e.target.checked?'입금 확인 저장':'입금 확인 해제')};
+  $('#pd').onchange=async e=>{S.paid[S.m]=e.target.checked;await post({action:'setPaid',month:S.m,paid:e.target.checked});vM();toast(e.target.checked?'입금 확인 저장':'입금 확인 해제')};
+  $('#cl').onclick=async()=>{if(!cl&&(is.length||!pd)&&!confirm('아직 끝나지 않은 단계가 있어요. 그래도 마감할까요?'))return;await post({action:'setClosed',month:S.m,closed:!cl});await load()};
   document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{S.f=b.dataset.f;vM()});
   document.querySelectorAll('[data-e]').forEach(b=>b.onclick=async()=>{const x=S.rows.find(y=>y.r==b.dataset.e);const d=prompt(x.shop+' '+fmt(x.amt)+'원\n올바른 날짜 (YYYY-MM-DD)',S.m+'-01');if(!d)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return toast('형식: 2026-09-14');const r=await post({action:'editDate',r:x.r,shop:x.shop,amt:x.amt,d});if(r.error)return toast('시트가 바뀌었어요. 다시 시도해 주세요');await load();toast('수정했어요')});
-  document.querySelectorAll('[data-x]').forEach(b=>b.onclick=async()=>{const x=S.rows.find(y=>y.r==b.dataset.x);if(!confirm(x.d+' '+x.shop+' '+fmt(x.amt)+'원\n시트에서 이 행을 삭제할까요?\n(시트 버전 기록에서 복구 가능)'))return;const r=await post({action:'delRow',r:x.r,shop:x.shop,amt:x.amt});if(r.error)return toast('시트가 바뀌었어요. 다시 시도해 주세요');await load();toast('삭제했어요')})}
+  document.querySelectorAll('[data-x]').forEach(b=>b.onclick=async()=>{const x=S.rows.find(y=>y.r==b.dataset.x);if(!confirm(x.d+' '+x.shop+' '+fmt(x.amt)+'원\n시트에서 이 행을 삭제할까요?\n(시트 버전 기록에서 복구 가능)'))return;const r=await post({action:'delRow',r:x.r,shop:x.shop,amt:x.amt});if(r.error)return toast('시트가 바뀌었어요. 다시 시도해 주세요');await load();toast('삭제했어요')});
+  document.querySelectorAll('[data-i]').forEach(b=>b.onclick=async()=>{await post({action:'setRow',key:b.dataset.i,i:true});await load();toast('확인 처리했어요')});
+  document.querySelectorAll('[data-sp]').forEach(b=>b.onclick=async()=>{const k=b.dataset.sp,c=S.cfg[k]||{},v=prompt('갱이 부담 비율 (0~100)\n비워두면 원래대로(사용자 기준)',c.s==null?'':c.s);if(v===null)return;const n=v.trim()===''?null:+v;if(n!==null&&!(n>=0&&n<=100))return toast('0~100 사이로 입력하세요');await post({action:'setRow',key:k,s:n});await load();toast('저장했어요')})}
 const SEED=[['KB손해보험','용이','의료/생활',1],['LGU+ 통신요금','용이','의료/생활',1],['LG전자 구독','용이','의료/생활',1],['교보라이프플래닛생명보험','용이','의료/생활',1],['프리티 모바일','용이','의료/생활',1],['롯데손해보험','용이','의료/생활',1],['삼성화재해상보험','용이','의료/생활',1],['관리비','용이','의료/생활',1],['GS25 LGD','용이','기타',0],['서울도시가스','용이','의료/생활',1],['브레인리그 운정학원','용이','의료/생활',1],['이마트','갱이','식비/카페',0],['트레이더스','갱이','식비/카페',0],['무신사','갱이','식비/카페',0],['홈플러스','갱이','식비/카페',0],['주유소','용이','교통/주유',0],['쿠팡','갱이','식비/카페',0],['올리브영','갱이','쇼핑/마트',0],['시네마','용이','기타',0],['롯데아울렛 파주점','갱이','쇼핑/마트',0],['유니클로','갱이','쇼핑/마트',0],['GS25 파크타운점','갱이','식비/카페',0],['닥터디퍼런트','갱이','쇼핑/마트',0],['알리익스프레스','용이','기타',0],['서울SUN치과병원','갱이','의료/생활',0],['병원','갱이','의료/생활',0],['스타필드','갱이','쇼핑/마트',0],['산부인과의원','갱이','의료/생활',0],['약국','갱이','의료/생활',0],['버거킹','용이','식비/카페',0],['자동차검사비','갱이','기타',0],['롯데쇼핑','갱이','쇼핑/마트',0]];
 function vR(){const rs=S.rows.filter(x=>x.m===S.m),mt=(x,r)=>x.shop.toLowerCase().includes(r.keyword.toLowerCase());
   const un=[...new Set(S.rows.filter(x=>!bad(x)&&!S.rules.some(r=>mt(x,r))).map(x=>x.shop.replace(/\s*[\(\|].*$/,'').trim()))].slice(0,10),R=S.rules.slice().sort((a,b)=>b.fix-a.fix);
@@ -112,6 +125,7 @@ function vS(){const ms=months().slice().reverse().slice(-12),D=ms.map(m=>({m,...
   $('#v').innerHTML=`<div class="box"><h3>갱이 ${yr}년 누적 ${fmt(Y.reduce((t,d)=>t+d.gg,0))}원</h3>${un.length?`<div class="warn" style="margin:0"><b>입금 미확인</b>${un.map(d=>`<div>${+d.m.slice(5)}월 ${fmt(d.gg)}원</div>`).join('')}</div>`:'<small style="color:var(--mut)">미확인 입금 없음</small>'}</div>
   <div class="box"><h3>월별 총액 <small style="font-weight:400;color:var(--mut)">고정 ■ 변동 ■</small></h3>${D.slice().reverse().map(d=>`<div style="margin-bottom:10px"><div class="row" style="justify-content:space-between"><span>${d.m.slice(2).replace('-','.')}</span><span>${fmt(d.t)} <small style="color:var(--mut)">용이 ${fmt(d.yy)} · 갱이 ${fmt(d.gg)}</small></span></div><div class="hb" style="width:${d.t/mx*100}%"><i style="width:${d.fx/(d.t||1)*100}%;background:var(--fix)"></i><i style="flex:1;background:var(--yong)"></i></div></div>`).join('')}</div>
   <div class="box"><h3>${yr}년 카테고리</h3>${ct.map(([k,v])=>`<div style="margin-bottom:8px"><div class="row" style="justify-content:space-between"><span>${esc(k)}</span><span>${fmt(v)}</span></div><div class="hb" style="width:${v/cm*100}%"><i style="flex:1;background:var(--ink)"></i></div></div>`).join('')}</div>
+  ${(()=>{const L=D.slice(-4),cs=[...new Set(S.rows.filter(x=>!bad(x)).map(x=>x.card||'기타'))];return`<div class="box"><h3>카드사별 추이</h3><table style="width:100%;font-size:13px;border-collapse:collapse"><tr><th></th>${L.map(d=>`<th>${+d.m.slice(5)}월</th>`).join('')}</tr>${cs.map(c=>`<tr><td>${esc(c)}</td>${L.map(d=>`<td style="text-align:right">${fmt(d.rs.filter(x=>(x.card||'기타')===c).reduce((t,x)=>t+x.amt,0))}</td>`).join('')}</tr>`).join('')}</table></div>`})()}
   <div class="box"><h3>${yr}년 가맹점 TOP 5</h3>${tp.map(([k,v])=>`<div class="item"><span class="nm"><span>${esc(k)}</span></span><span class="am">${fmt(v)}</span></div>`).join('')}</div>`}
 document.querySelectorAll('nav button[data-t]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;render()});$('#gear').onclick=setup;load();
 </script></body></html>
