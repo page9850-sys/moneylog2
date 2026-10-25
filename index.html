@@ -52,10 +52,13 @@ function toast(t){const e=$('#toast');e.textContent=t;e.className='on';setTimeou
 async function post(o){const c=cfg();await fetch(c.u,{method:'POST',body:JSON.stringify({token:c.t,...o})})}
 async function load(){
   const c=cfg();if(!c.u){return setup()}
-  try{const r=await(await fetch(c.u+'?token='+encodeURIComponent(c.t))).json();if(r.error)throw 0;
-    S.rows=r.rows.map(x=>({...x,m:x.d.slice(0,7),day:x.d.slice(8,10)}));S.rules=r.rules;S.paid=r.paid;
-    const ms=months();if(!S.m||!ms.includes(S.m)){const now=new Date().toISOString().slice(0,7);S.m=ms.includes(now)?now:ms[0]||''}
-    render()}catch(e){$('#v').innerHTML='<div class="empty">시트에 연결하지 못했어요.<br>주소와 비밀번호를 확인해 주세요.<br><br><button class="btn" onclick="setup()">연결 설정</button></div>'}
+  let r;
+  try{r=await(await fetch(c.u+'?token='+encodeURIComponent(c.t))).json();if(r.error)throw new Error('비밀번호(TOKEN)가 Code.gs와 달라요')}
+  catch(e){const m=e.name==='SyntaxError'?'응답이 올바르지 않아요. 웹앱 액세스 권한이 "모든 사용자"인지, 시트에서 연 Apps Script인지 확인하세요':e.name==='TypeError'?'주소에 접근할 수 없어요. /exec 주소인지, 권한 승인과 재배포를 확인하세요':e.message;
+    $('#v').innerHTML='<div class="empty">시트에 연결하지 못했어요.<br><b>'+esc(m)+'</b><br><br><button class="btn" onclick="setup()">연결 설정</button></div>';return}
+  S.rows=r.rows.map(x=>({...x,m:x.d.slice(0,7),day:x.d.slice(8,10)}));S.rules=r.rules;S.paid=r.paid;
+  const ms=months();if(!S.m||!ms.includes(S.m)){const now=new Date().toISOString().slice(0,7);S.m=ms.includes(now)?now:ms[0]||''}
+  try{render()}catch(e){$('#v').innerHTML='<div class="empty">화면 오류: '+esc(e.message)+'</div>'}
 }
 function setup(){const u=prompt('Apps Script 웹앱 주소',cfg().u);if(u===null)return;const t=prompt('비밀번호(Code.gs의 TOKEN)',cfg().t);if(t===null)return;localStorage.setItem('u',u.trim());localStorage.setItem('t',t.trim());load()}
 const bad=x=>!/^\d{4}-\d{2}/.test(x.d)||x.day==='00'||+x.d.slice(0,4)<YR-1;
