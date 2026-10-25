@@ -56,7 +56,7 @@ async function load(){
   try{r=await(await fetch(c.u+'?token='+encodeURIComponent(c.t))).json();if(r.error)throw new Error('비밀번호(TOKEN)가 Code.gs와 달라요')}
   catch(e){const m=e.name==='SyntaxError'?'응답이 올바르지 않아요. 웹앱 액세스 권한이 "모든 사용자"인지, 시트에서 연 Apps Script인지 확인하세요':e.name==='TypeError'?'주소에 접근할 수 없어요. /exec 주소인지, 권한 승인과 재배포를 확인하세요':e.message;
     $('#v').innerHTML='<div class="empty">시트에 연결하지 못했어요.<br><b>'+esc(m)+'</b><br><br><button class="btn" onclick="setup()">연결 설정</button></div>';return}
-  S.rows=r.rows.map(x=>({...x,m:x.m||''}));const cn={};S.rows.forEach(x=>{const b=x.d+'|'+x.shop+'|'+x.amt;cn[b]=(cn[b]||0)+1;x.k=cn[b]>1?b+'#'+cn[b]:b});S.rules=r.rules;S.paid=r.paid;S.closed=r.closed||{};S.cfg=r.cfg||{};
+  S.rows=r.rows.map(x=>({...x,m:x.m||''}));const cn={};S.rows.forEach(x=>{const b=x.m+'|'+x.shop+'|'+x.amt;cn[b]=(cn[b]||0)+1;x.k=cn[b]>1?b+'#'+cn[b]:b});S.rules=r.rules;S.paid=r.paid;S.closed=r.closed||{};S.cfg=r.cfg||{};
   const ms=months();if(!S.m||!ms.includes(S.m)){const now=new Date().toISOString().slice(0,7);S.m=ms.includes(now)?now:ms[0]||''}
   try{render()}catch(e){$('#v').innerHTML='<div class="empty">화면 오류: '+esc(e.message)+'</div>'}
 }
