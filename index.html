@@ -49,7 +49,7 @@ const $=s=>document.querySelector(s),fmt=n=>(n<0?'-':'')+Math.abs(n).toLocaleStr
 const S={rows:[],rules:[],paid:{},m:'',tab:'m',f:'all'},YR=new Date().getFullYear();
 const cfg=()=>({u:localStorage.getItem('u')||'',t:localStorage.getItem('t')||''});
 function toast(t){const e=$('#toast');e.textContent=t;e.className='on';setTimeout(()=>e.className='',1600)}
-async function post(o){const c=cfg();await fetch(c.u,{method:'POST',body:JSON.stringify({token:c.t,...o})})}
+async function post(o){const c=cfg();try{return await(await fetch(c.u,{method:'POST',body:JSON.stringify({token:c.t,...o})})).json()}catch(e){return{}}}
 async function load(){
   const c=cfg();if(!c.u){return setup()}
   let r;
@@ -84,13 +84,15 @@ function vM(){const ms=months();if(!S.m)return $('#v').innerHTML='<div class="em
   <div class="grid"><div style="--k:var(--ink)"><small>총 인출</small><b>${fmt(s.t)}</b></div><div style="--k:var(--yong)"><small>용이 부담</small><b>${fmt(s.yy)}</b></div><div style="--k:var(--gaeng)"><small>갱이 부담</small><b>${fmt(s.gg)}</b></div><div style="--k:var(--fix)"><small>고정비</small><b>${fmt(s.fx)}</b></div></div>
   <div class="slip"><h2>갱이 입금 요청</h2><div class="amt">${fmt(s.gg)}원</div><p>${nextMon(S.m)} 인출 · 고정비는 제외한 갱이 사용분</p>
   <div class="row"><button class="btn" id="cp">카톡용 복사</button><label><input type="checkbox" id="pd" ${S.paid[S.m]?'checked':''}>입금 확인</label></div></div>
-  ${is.length?`<div class="warn"><b>데이터 점검 ${is.length}건</b> · 13일 전에 시트에서 고쳐 주세요${is.slice(0,8).map(o=>`<div>${esc(o.x.d)} ${esc(o.x.shop)} ${fmt(o.x.amt)} → ${o.w} <small>(시트 ${o.x.r}행)</small></div>`).join('')}</div>`:''}
+  ${is.length?`<div class="warn"><b>데이터 점검 ${is.length}건</b> · 13일 전에 시트에서 고쳐 주세요${is.slice(0,8).map(o=>`<div>${esc(o.x.d)} ${esc(o.x.shop)} ${fmt(o.x.amt)} → ${o.w}<br><button class="btn sub" style="padding:3px 10px;font-size:12px" data-e="${o.x.r}">날짜 수정</button> <button class="btn sub" style="padding:3px 10px;font-size:12px" data-x="${o.x.r}">행 삭제</button></div>`).join('')}</div>`:''}
   <div class="chips">${[['all','전체'],['용이','용이'],['갱이','갱이'],['fix','고정비']].map(([k,l])=>`<button data-f="${k}" class="${S.f===k?'on':''}">${l}</button>`).join('')}</div>
   ${rs.map(x=>{const f=isFix(x);return`<div class="item"><span class="dt">${mm(x.d)}</span><div class="nm"><span>${esc(x.shop)}</span><small><span class="tag ${f?'f':x.user==='갱이'?'g':'y'}" style="display:inline">${f?'고정':esc(x.user)}</span>${esc(x.cat||'')}</small></div><span class="am ${x.amt<0?'neg':''}">${fmt(x.amt)}</span></div>`}).join('')||'<div class="empty">내역이 없어요.</div>'}`;
   $('#ms').onchange=e=>{S.m=e.target.value;vM()};$('#pv').onclick=()=>{S.m=ms[i+1];vM()};$('#nx').onclick=()=>{S.m=ms[i-1];vM()};
   $('#cp').onclick=()=>copy(kakao(S.m));
   $('#pd').onchange=async e=>{S.paid[S.m]=e.target.checked;await post({action:'setPaid',month:S.m,paid:e.target.checked});toast(e.target.checked?'입금 확인 저장':'입금 확인 해제')};
-  document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{S.f=b.dataset.f;vM()})}
+  document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{S.f=b.dataset.f;vM()});
+  document.querySelectorAll('[data-e]').forEach(b=>b.onclick=async()=>{const x=S.rows.find(y=>y.r==b.dataset.e);const d=prompt(x.shop+' '+fmt(x.amt)+'원\n올바른 날짜 (YYYY-MM-DD)',S.m+'-01');if(!d)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return toast('형식: 2026-09-14');const r=await post({action:'editDate',r:x.r,shop:x.shop,amt:x.amt,d});if(r.error)return toast('시트가 바뀌었어요. 다시 시도해 주세요');await load();toast('수정했어요')});
+  document.querySelectorAll('[data-x]').forEach(b=>b.onclick=async()=>{const x=S.rows.find(y=>y.r==b.dataset.x);if(!confirm(x.d+' '+x.shop+' '+fmt(x.amt)+'원\n시트에서 이 행을 삭제할까요?\n(시트 버전 기록에서 복구 가능)'))return;const r=await post({action:'delRow',r:x.r,shop:x.shop,amt:x.amt});if(r.error)return toast('시트가 바뀌었어요. 다시 시도해 주세요');await load();toast('삭제했어요')})}
 const SEED=[['KB손해보험','용이','의료/생활',1],['LGU+ 통신요금','용이','의료/생활',1],['LG전자 구독','용이','의료/생활',1],['교보라이프플래닛생명보험','용이','의료/생활',1],['프리티 모바일','용이','의료/생활',1],['롯데손해보험','용이','의료/생활',1],['삼성화재해상보험','용이','의료/생활',1],['관리비','용이','의료/생활',1],['GS25 LGD','용이','기타',0],['서울도시가스','용이','의료/생활',1],['브레인리그 운정학원','용이','의료/생활',1],['이마트','갱이','식비/카페',0],['트레이더스','갱이','식비/카페',0],['무신사','갱이','식비/카페',0],['홈플러스','갱이','식비/카페',0],['주유소','용이','교통/주유',0],['쿠팡','갱이','식비/카페',0],['올리브영','갱이','쇼핑/마트',0],['시네마','용이','기타',0],['롯데아울렛 파주점','갱이','쇼핑/마트',0],['유니클로','갱이','쇼핑/마트',0],['GS25 파크타운점','갱이','식비/카페',0],['닥터디퍼런트','갱이','쇼핑/마트',0],['알리익스프레스','용이','기타',0],['서울SUN치과병원','갱이','의료/생활',0],['병원','갱이','의료/생활',0],['스타필드','갱이','쇼핑/마트',0],['산부인과의원','갱이','의료/생활',0],['약국','갱이','의료/생활',0],['버거킹','용이','식비/카페',0],['자동차검사비','갱이','기타',0],['롯데쇼핑','갱이','쇼핑/마트',0]];
 function vR(){const rs=S.rows.filter(x=>x.m===S.m),mt=(x,r)=>x.shop.toLowerCase().includes(r.keyword.toLowerCase());
   const un=[...new Set(S.rows.filter(x=>!bad(x)&&!S.rules.some(r=>mt(x,r))).map(x=>x.shop.replace(/\s*[\(\|].*$/,'').trim()))].slice(0,10),R=S.rules.slice().sort((a,b)=>b.fix-a.fix);
