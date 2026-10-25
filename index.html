@@ -1,835 +1,112 @@
 <!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>용이 & 갱이의 스마트 정산 가계부</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Pretendard Font -->
-    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Pretendard', sans-serif; word-break: keep-all; }
-        .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    </style>
-</head>
-<body class="bg-stone-50/60 text-stone-800 min-h-screen pb-16">
-
-    <!-- Header -->
-    <header class="bg-gradient-to-r from-stone-700 to-amber-900 text-stone-100 shadow-md sticky top-0 z-40">
-        <div class="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
-            <div>
-                <h1 class="text-lg sm:text-xl font-bold flex items-center gap-2">
-                    💳 용이 & 갱이의 스마트 정산
-                </h1>
-                <p class="text-stone-300 text-xs">구글 시트 연동 및 스마트 규칙 자동 배정 시스템</p>
-            </div>
-            <!-- Month Selector -->
-            <div class="flex items-center gap-3 bg-white/10 px-4 py-2 rounded-2xl backdrop-blur-md border border-white/15">
-                <button onclick="navigateMonth(-1)" class="w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-white/25 rounded-xl transition text-lg font-bold">&larr;</button>
-                <span id="currentMonthDisplay" class="font-bold text-sm sm:text-base min-w-[90px] text-center">2026년 9월</span>
-                <button onclick="navigateMonth(1)" class="w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-white/25 rounded-xl transition text-lg font-bold">&rarr;</button>
-            </div>
-        </div>
-    </header>
-
-    <!-- Navigation Tabs -->
-    <nav class="max-w-5xl mx-auto px-4 mt-6">
-        <div class="flex border-b border-stone-200 gap-6 sm:gap-8">
-            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="pb-3 font-bold text-stone-700 border-b-2 border-stone-700 transition flex items-center gap-2 text-sm sm:text-base">
-                📊 이번 달 정산 대시보드
-            </button>
-            <button onclick="switchTab('comparison')" id="tab-comparison" class="pb-3 font-medium text-stone-400 hover:text-stone-700 transition flex items-center gap-2 text-sm sm:text-base">
-                📈 월별 비교 및 차트
-            </button>
-        </div>
-    </nav>
-
-    <!-- Main Container -->
-    <main class="max-w-5xl mx-auto px-4 mt-6 space-y-6">
-
-        <!-- TAB 1: Dashboard -->
-        <div id="view-dashboard" class="space-y-6">
-
-            <!-- 🤖 AI Capture Trigger & Multi-Upload Area -->
-            <div class="bg-gradient-to-r from-stone-100 to-amber-50/50 p-5 sm:p-6 rounded-3xl shadow-sm border border-stone-200/60 space-y-4">
-                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div>
-                        <h3 class="font-bold text-stone-900 text-base flex items-center gap-2">
-                            🤖 AI 스파크 자동 인식 트리거
-                        </h3>
-                        <p class="text-xs text-stone-500 mt-1">시트 Rules 규칙으로 자동 배정되며, 신규 항목만 검토 창을 띄웁니다.</p>
-                    </div>
-                    <label class="cursor-pointer bg-stone-700 hover:bg-stone-800 text-white text-xs font-semibold px-4 py-3 rounded-2xl transition shadow-md flex items-center gap-2 shrink-0">
-                        <span>📁 캡처 이미지 여러 장 선택</span>
-                        <input type="file" id="captureInput" multiple accept="image/*" class="hidden" onchange="handleCaptureUpload(event)">
-                    </label>
-                </div>
-                <!-- Real-time Status List for Each Image -->
-                <div id="uploadStatusContainer" class="hidden space-y-2 pt-2 border-t border-stone-200">
-                    <p class="text-xs font-bold text-stone-700">이미지별 AI 분석 및 처리 현황:</p>
-                    <div id="statusList" class="space-y-2"></div>
-                </div>
-            </div>
-
-            <!-- Top Summary Cards -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="bg-white p-5 rounded-2xl shadow-sm border border-stone-100 flex flex-col justify-between">
-                    <p class="text-xs font-semibold text-stone-400 uppercase">이번 달 총 지출</p>
-                    <h3 id="totalSpend" class="text-2xl font-extrabold text-stone-900 mt-2">0원</h3>
-                    <span class="text-xs text-stone-400 mt-1">전체 합계</span>
-                </div>
-                <div class="bg-white p-5 rounded-2xl shadow-sm border border-stone-100 flex flex-col justify-between">
-                    <p class="text-xs font-semibold text-sky-600 uppercase">용이(남편) 사용액</p>
-                    <h3 id="yongSpend" class="text-2xl font-extrabold text-sky-700 mt-2">0원</h3>
-                    <span class="text-xs text-stone-400 mt-1">개인 명의 카드 사용</span>
-                </div>
-                <div class="bg-white p-5 rounded-2xl shadow-sm border border-stone-100 flex flex-col justify-between">
-                    <p class="text-xs font-semibold text-amber-600 uppercase">갱이(아내) 사용액</p>
-                    <h3 id="gaengSpend" class="text-2xl font-extrabold text-amber-600 mt-2">0원</h3>
-                    <span class="text-xs text-stone-400 mt-1">개인 명의 카드 사용</span>
-                </div>
-                <div class="bg-gradient-to-br from-stone-700 to-amber-800 text-white p-5 rounded-2xl shadow-md flex flex-col justify-between">
-                    <div>
-                        <p class="text-xs font-semibold text-stone-200 uppercase">최종 정산 결과</p>
-                        <h3 id="settlementResult" class="text-sm font-bold mt-2 leading-snug">계산 중...</h3>
-                    </div>
-                    <button onclick="copySettlementToClipboard()" class="mt-4 bg-white/20 hover:bg-white/30 text-white text-xs py-2 px-3 rounded-xl font-bold transition text-center backdrop-blur-sm">
-                        📋 카톡용 정산 내용 복사
-                    </button>
-                </div>
-            </div>
-
-            <!-- Card Company Breakdown & Transactions Grid -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Card Company Totals -->
-                <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-100 lg:col-span-1 space-y-4">
-                    <h3 class="font-bold text-stone-800 text-base flex items-center justify-between">
-                        <span>💳 카드사별 총액</span>
-                        <span class="text-xs font-normal text-stone-400">명세서 기준</span>
-                    </h3>
-                    <div id="cardCompanyList" class="space-y-3"></div>
-                </div>
-
-                <!-- Transaction List -->
-                <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-100 lg:col-span-2 space-y-4">
-                    <div class="flex justify-between items-center">
-                        <h3 class="font-bold text-stone-800 text-base">📝 실시간 지출 내역</h3>
-                        <button onclick="openAddModal()" class="bg-stone-700 hover:bg-stone-800 text-white text-xs px-3.5 py-2 rounded-xl font-semibold transition shadow-sm">
-                            + 수동 내역 추가
-                        </button>
-                    </div>
-                    <div class="table-container">
-                        <table class="w-full text-left border-collapse text-xs sm:text-sm whitespace-nowrap">
-                            <thead>
-                                <tr class="border-b border-stone-100 text-stone-400 font-semibold">
-                                    <th class="py-3 px-2">날짜</th>
-                                    <th class="py-3 px-2">카드 (사용자)</th>
-                                    <th class="py-3 px-2">가맹점</th>
-                                    <th class="py-3 px-2">카테고리</th>
-                                    <th class="py-3 px-2 text-right">금액</th>
-                                    <th class="py-3 px-2 text-center">관리</th>
-                                </tr>
-                            </thead>
-                            <tbody id="transactionTableBody" class="divide-y divide-stone-50"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 갱이가 사용한 금액 상세 표 -->
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-100 space-y-4">
-                <h3 class="font-bold text-stone-800 text-base flex items-center gap-2">
-                    🛍️ 갱이(아내) 사용 내역 상세 (보낼 금액 산출용)
-                </h3>
-                <div class="table-container">
-                    <table class="w-full text-left border-collapse text-xs sm:text-sm whitespace-nowrap">
-                        <thead>
-                            <tr class="border-b border-stone-100 text-stone-400 font-semibold">
-                                <th class="py-3 px-2">날짜</th>
-                                <th class="py-3 px-2">카드사</th>
-                                <th class="py-3 px-2">가맹점</th>
-                                <th class="py-3 px-2">카테고리</th>
-                                <th class="py-3 px-2 text-right">금액</th>
-                            </tr>
-                        </thead>
-                        <tbody id="gaengTransactionTableBody" class="divide-y divide-stone-50"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- TAB 2: Comparison & Charts -->
-        <div id="view-comparison" class="hidden space-y-6">
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-100 space-y-6">
-                <div>
-                    <h3 class="font-bold text-slate-800 text-lg">📈 월별 지출 트렌드 및 비교 분석</h3>
-                    <p class="text-xs text-stone-400 mt-1">X축에 월을 두고 용이와 갱이의 지출 규모를 비교합니다.</p>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-stone-50/50 p-4 rounded-2xl border border-stone-100">
-                        <h4 class="font-semibold text-stone-700 text-sm mb-3">월별 용이 vs 갱이 비교 (X축: 월)</h4>
-                        <div class="relative h-64"><canvas id="userCompareChart"></canvas></div>
-                    </div>
-                    <div class="bg-stone-50/50 p-4 rounded-2xl border border-stone-100">
-                        <h4 class="font-semibold text-stone-700 text-sm mb-3">이번 달 카테고리별 비중</h4>
-                        <div class="relative h-64"><canvas id="categoryPieChart"></canvas></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 가맹점별 월별 비교표 -->
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-100 space-y-4">
-                <h3 class="font-bold text-stone-800 text-base">🔍 실제 사용처(가맹점)별 월별 지출 비교표</h3>
-                <div class="table-container">
-                    <table class="w-full text-left border-collapse text-xs sm:text-sm whitespace-nowrap">
-                        <thead>
-                            <tr class="border-b border-stone-100 text-stone-400 font-semibold" id="merchantTableHeader"></tr>
-                        </thead>
-                        <tbody id="merchantTableBody" class="divide-y divide-stone-50"></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- 직전 3개월 요약표 -->
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-100 space-y-4">
-                <h3 class="font-bold text-stone-800 text-base">📋 직전 3개월 월별 세부 정산 요약표 (용이 vs 갱이)</h3>
-                <div class="table-container">
-                    <table class="w-full text-left border-collapse text-xs sm:text-sm whitespace-nowrap">
-                        <thead>
-                            <tr class="border-b border-stone-100 text-stone-400 font-semibold">
-                                <th class="py-3 px-3">월</th>
-                                <th class="py-3 px-3">총 지출액</th>
-                                <th class="py-3 px-3">용이(남편)</th>
-                                <th class="py-3 px-3">갱이(아내)</th>
-                                <th class="py-3 px-3 text-right">정산 결과</th>
-                            </tr>
-                        </thead>
-                        <tbody id="monthlySummaryTableBody" class="divide-y divide-stone-50"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- Modals (Add, Edit, Review) -->
-    <div id="addModal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <h3 id="modalTitle" class="font-bold text-lg text-stone-800">수동 거래 내역 추가</h3>
-            <form onsubmit="saveTransaction(event)" class="space-y-3">
-                <input type="hidden" id="editIndex" value="-1">
-                <div>
-                    <label class="block text-xs font-semibold text-stone-500 mb-1">날짜 및 시간</label>
-                    <input type="text" id="inputDate" class="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-600">
-                </div>
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block text-xs font-semibold text-stone-500 mb-1">카드사</label>
-                        <select id="inputCard" class="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm">
-                            <option value="현대카드">현대카드</option><option value="신한카드">신한카드</option><option value="국민카드">국민카드</option><option value="삼성카드">삼성카드</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-stone-500 mb-1">사용자 (명의)</label>
-                        <select id="inputUser" class="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm">
-                            <option value="용이">용이 (남편)</option><option value="갱이">갱이 (아내)</option><option value="기타">기타 / 공동</option>
-                        </select>
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-stone-500 mb-1">가맹점 이름</label>
-                    <input type="text" id="inputMerchant" placeholder="예: 스타벅스 강남점" required class="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm">
-                </div>
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block text-xs font-semibold text-stone-500 mb-1">금액 (원)</label>
-                        <input type="number" id="inputAmount" placeholder="15000" required class="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-stone-500 mb-1">카테고리</label>
-                        <select id="inputCategory" class="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm">
-                            <option value="식비/카페">식비/카페</option><option value="쇼핑/마트">쇼핑/마트</option><option value="교통/주유">교통/주유</option><option value="의료/생활">의료/생활</option><option value="기타">기타</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="flex justify-end gap-2 pt-3">
-                    <button type="button" onclick="closeAddModal()" class="px-4 py-2 text-sm text-stone-500 font-medium hover:bg-stone-100 rounded-xl">취소</button>
-                    <button type="submit" class="px-4 py-2 text-sm bg-stone-700 hover:bg-stone-800 text-white font-semibold rounded-xl shadow-sm">저장하기</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- AI Review Modal (신규 항목만 팝업) -->
-    <div id="reviewModal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <h3 class="font-bold text-lg text-stone-800">🔍 신규 가맹점 검토 및 예외 수정</h3>
-            <p class="text-xs text-stone-500">구글 시트 Rules에 없는 신규 가맹점입니다. 명의자(용이/갱이)를 확인 후 반영해 주세요.</p>
-            <div id="reviewList" class="space-y-3 max-h-72 overflow-y-auto pr-1"></div>
-            <div class="flex justify-end pt-3">
-                <button type="button" onclick="confirmReviewAndSave()" class="px-5 py-2.5 text-sm bg-stone-700 hover:bg-stone-800 text-white font-semibold rounded-xl shadow-sm">
-                    확인 및 대시보드 반영
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- JavaScript Logic -->
-    <script>
-        let currentYearMonth = "2026-09";
-        let dbTransactions = {};
-        let smartAutoRules = []; // 구글 시트 Rules 탭에서 동적으로 로드
-        let pendingReviewItems = [];
-
-        // Chart.js 인스턴스
-        let userCompareChart = null;
-        let categoryPieChart = null;
-
-        // 배포하신 구글 앱스 스크립트 웹앱 URL 입력
-        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw84fisQtj2g8d3buPJ6mzFQ9kR7A2HVJhkqRqWnRwqhC7HECijuUeONshkOzcF1HLYbQ/exec";
-
-        window.onload = function() {
-            // 차트를 먼저 생성한 뒤 화면을 렌더링
-            initCharts();
-            renderAll();
-
-            // GAS URL이 실제로 입력된 경우에만 Google Sheets 데이터를 로드
-            if (GAS_WEB_APP_URL && !GAS_WEB_APP_URL.includes('여기에_')) {
-                loadDataFromGoogleSheet();
-            }
-        };
-
-        // 구글 시트에서 Transactions와 Rules를 한 번에 불러오는 함수
-        async function loadDataFromGoogleSheet() {
-            try {
-                let response = await fetch(GAS_WEB_APP_URL);
-                let data = await response.json();
-
-                // 1. Rules 탭 데이터 동적 탑재
-                smartAutoRules = Array.isArray(data.rules) ? data.rules : [];
-
-                // 2. Transactions 데이터를 연월별로 분류
-                dbTransactions = {};
-                (Array.isArray(data.transactions) ? data.transactions : []).forEach(t => {
-                    let ym = String(t.date).substring(0, 7);
-                    if (!dbTransactions[ym]) dbTransactions[ym] = [];
-                    dbTransactions[ym].push(t);
-                });
-
-                renderAll();
-                updateChartsData();
-            } catch (error) {
-                console.error("데이터 로드 실패:", error);
-            }
-        }
-
-        function switchTab(tabId) {
-            document.getElementById('view-dashboard').classList.toggle('hidden', tabId !== 'dashboard');
-            document.getElementById('view-comparison').classList.toggle('hidden', tabId !== 'comparison');
-            
-            document.getElementById('tab-dashboard').className = tabId === 'dashboard' 
-                ? 'pb-3 font-bold text-stone-700 border-b-2 border-stone-700 transition flex items-center gap-2 text-sm sm:text-base'
-                : 'pb-3 font-medium text-stone-400 hover:text-stone-700 transition flex items-center gap-2 text-sm sm:text-base';
-                
-            document.getElementById('tab-comparison').className = tabId === 'comparison' 
-                ? 'pb-3 font-bold text-stone-700 border-b-2 border-stone-700 transition flex items-center gap-2 text-sm sm:text-base'
-                : 'pb-3 font-medium text-stone-400 hover:text-stone-700 transition flex items-center gap-2 text-sm sm:text-base';
-
-            if(tabId === 'comparison') {
-                updateChartsData();
-                renderMerchantComparisonTable();
-            }
-        }
-
-        function navigateMonth(direction) {
-            let [y, m] = currentYearMonth.split('-').map(Number);
-            m += direction;
-            if(m > 12) { m = 1; y++; }
-            if(m < 1) { m = 12; y--; }
-            currentYearMonth = `${y}-${String(m).padStart(2, '0')}`;
-            renderAll();
-        }
-
-        // 실제 이미지 -> GAS -> Drive + Gemini -> Rules -> Sheets 처리
-        async function handleCaptureUpload(event) {
-            const files = Array.from(event.target.files || []);
-            if (!files.length) return;
-
-            const container = document.getElementById('uploadStatusContainer');
-            const statusList = document.getElementById('statusList');
-            container.classList.remove('hidden');
-            statusList.innerHTML = '';
-
-            if (GAS_WEB_APP_URL.includes('여기에_')) {
-                alert('먼저 GAS_WEB_APP_URL을 실제 Google Apps Script 웹앱 URL로 설정해 주세요.');
-                event.target.value = '';
-                return;
-            }
-
-            for (let index = 0; index < files.length; index++) {
-                const file = files[index];
-                const statusId = `status-item-${index}`;
-                statusList.insertAdjacentHTML('beforeend', `
-                    <div id="${statusId}" class="flex items-center justify-between p-3 bg-white rounded-xl border border-stone-200 text-xs sm:text-sm shadow-sm">
-                        <div class="flex items-center gap-2 overflow-hidden">
-                            <span class="animate-spin text-stone-600">⏳</span>
-                            <span class="font-medium text-stone-700 truncate">${escapeHtml(file.name)}</span>
-                        </div>
-                        <span class="text-stone-600 font-semibold shrink-0">AI 분석 중...</span>
-                    </div>
-                `);
-
-                try {
-                    const dataUrl = await fileToDataUrl(file);
-                    const base64 = dataUrl.split(',')[1];
-                    const result = await postJsonToGas({
-                        action: 'processCapture',
-                        fileName: file.name,
-                        mimeType: file.type || 'image/jpeg',
-                        base64: base64,
-                        currentYearMonth: currentYearMonth
-                    });
-
-                    if (!result.ok) throw new Error(result.error || '서버 처리 실패');
-
-                    if (result.transactions && result.transactions.length) {
-                        if (!dbTransactions[currentYearMonth]) dbTransactions[currentYearMonth] = [];
-                        result.transactions.forEach(tx => dbTransactions[currentYearMonth].unshift(tx));
-                    }
-                    if (result.reviewItems && result.reviewItems.length) {
-                        pendingReviewItems.push(...result.reviewItems.map(item => ({
-                            date: item.date, card: item.card, user: item.user || '기타', merchant: item.merchant,
-                            category: item.category || '기타', amount: item.amount
-                        })));
-                    }
-
-                    const itemEl = document.getElementById(statusId);
-                    if (itemEl) {
-                        itemEl.className = `flex items-center justify-between p-3 ${result.needsReview ? 'bg-amber-50 border-amber-200' : 'bg-stone-100 border-stone-200'} rounded-xl border text-xs sm:text-sm shadow-sm`;
-                        itemEl.innerHTML = `<span class="${result.needsReview ? 'text-amber-800' : 'text-stone-700'}">${result.needsReview ? '🔍 AI 분석 완료 — 신규/확인 필요' : '⚡ AI 분석·자동분류 완료'}: ${escapeHtml(result.summary || file.name)}</span>`;
-                    }
-                } catch (error) {
-                    const itemEl = document.getElementById(statusId);
-                    if (itemEl) {
-                        itemEl.className = "flex items-center justify-between p-3 bg-red-50 rounded-xl border border-red-200 text-xs sm:text-sm shadow-sm";
-                        itemEl.innerHTML = `<span class="text-red-700">❌ 처리 실패: ${escapeHtml(error.message || String(error))}</span>`;
-                    }
-                    console.error('캡처 처리 오류:', error);
-                }
-            }
-
-            renderAll();
-            if (pendingReviewItems.length > 0) openReviewModal();
-            event.target.value = '';
-        }
-
-        function fileToDataUrl(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
-        }
-
-        async function postJsonToGas(payload) {
-            const response = await fetch(GAS_WEB_APP_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify(payload)
-            });
-            const text = await response.text();
-            let data;
-            try { data = JSON.parse(text); }
-            catch (_) { throw new Error('Google Apps Script 응답을 JSON으로 읽지 못했습니다: ' + text.slice(0, 200)); }
-            return data;
-        }
-
-        function escapeHtml(value) {
-            return String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
-        }
-
-        // 구글 시트에 데이터 POST 전송 함수
-        async function saveTransactionToGoogleSheet(txData) {
-            if (GAS_WEB_APP_URL.includes("여기에")) return;
-            try {
-                await fetch(GAS_WEB_APP_URL, {
-                    method: "POST",
-                    body: JSON.stringify(txData)
-                });
-            } catch (e) {
-                console.error("시트 저장 전송 오류:", e);
-            }
-        }
-
-        function openReviewModal() {
-            let listEl = document.getElementById('reviewList');
-            let html = '';
-            pendingReviewItems.forEach((item, idx) => {
-                html += `
-                    <div class="p-3 bg-stone-50 rounded-2xl border border-stone-200 space-y-2">
-                        <div class="flex justify-between items-center text-xs text-stone-500">
-                            <span>${item.date}</span>
-                            <span class="font-bold text-stone-700">${item.card}</span>
-                        </div>
-                        <div class="grid grid-cols-3 gap-2">
-                            <input type="text" id="rev-merchant-${idx}" value="${item.merchant}" class="bg-white border border-stone-200 rounded-lg px-2 py-1 text-xs font-semibold text-stone-800">
-                            <select id="rev-user-${idx}" class="bg-white border border-stone-200 rounded-lg px-2 py-1 text-xs font-semibold text-stone-800">
-                                <option value="용이" ${item.user==='용이'?'selected':''}>용이(남편)</option>
-                                <option value="갱이" ${item.user==='갱이'?'selected':''}>갱이(아내)</option>
-                                <option value="기타" ${item.user==='기타'?'selected':''}>기타/공동</option>
-                            </select>
-                            <input type="number" id="rev-amount-${idx}" value="${item.amount}" class="bg-white border border-stone-200 rounded-lg px-2 py-1 text-xs font-semibold text-right text-stone-800">
-                        </div>
-                    </div>
-                `;
-            });
-            listEl.innerHTML = html;
-            document.getElementById('reviewModal').classList.remove('hidden');
-            document.getElementById('reviewModal').classList.add('flex');
-        }
-
-        function confirmReviewAndSave() {
-            pendingReviewItems.forEach((item, idx) => {
-                let m = document.getElementById(`rev-merchant-${idx}`).value;
-                let u = document.getElementById(`rev-user-${idx}`).value;
-                let a = parseInt(document.getElementById(`rev-amount-${idx}`).value) || 0;
-
-                if(!dbTransactions[currentYearMonth]) dbTransactions[currentYearMonth] = [];
-                let finalTx = {
-                    date: item.date,
-                    card: item.card,
-                    user: u,
-                    merchant: m,
-                    category: item.category,
-                    amount: a
-                };
-                dbTransactions[currentYearMonth].unshift(finalTx);
-                saveTransactionToGoogleSheet(finalTx);
-            });
-
-            pendingReviewItems = [];
-            document.getElementById('reviewModal').classList.remove('flex');
-            document.getElementById('reviewModal').classList.add('hidden');
-            renderAll();
-            alert('신규 내역이 검토되어 대시보드 및 시트에 반영되었습니다!');
-        }
-
-        function renderAll() {
-            let [y, m] = currentYearMonth.split('-');
-            document.getElementById('currentMonthDisplay').innerText = `${y}년 ${parseInt(m)}월`;
-
-            let txs = dbTransactions[currentYearMonth] || [];
-
-            let total = 0, yongTotal = 0, gaengTotal = 0;
-            let cardTotals = {};
-
-            txs.forEach(t => {
-                const amount = Number(t.amount) || 0;
-                total += amount;
-                if(t.user === '용이') yongTotal += amount;
-                else if(t.user === '갱이') gaengTotal += amount;
-
-                if(!cardTotals[t.card]) cardTotals[t.card] = 0;
-                cardTotals[t.card] += amount;
-            });
-
-            let settlementText = `갱이가 용이에게 <br/><span class="text-lg font-extrabold underline">${gaengTotal.toLocaleString()}원</span> 보낼 금액 필요`;
-
-            document.getElementById('totalSpend').innerText = total.toLocaleString() + '원';
-            document.getElementById('yongSpend').innerText = yongTotal.toLocaleString() + '원';
-            document.getElementById('gaengSpend').innerText = gaengTotal.toLocaleString() + '원';
-            document.getElementById('settlementResult').innerHTML = settlementText;
-
-            let cardHtml = '';
-            for(let [card, amt] of Object.entries(cardTotals)) {
-                let p = total > 0 ? Math.round((amt / total) * 100) : 0;
-                cardHtml += `
-                    <div class="p-3 bg-stone-50 rounded-xl space-y-1">
-                        <div class="flex justify-between text-sm font-semibold text-stone-700">
-                            <span>${card}</span>
-                            <span>${amt.toLocaleString()}원 (${p}%)</span>
-                        </div>
-                        <div class="w-full bg-stone-200 h-1.5 rounded-full overflow-hidden">
-                            <div class="bg-stone-600 h-full rounded-full" style="width: ${p}%"></div>
-                        </div>
-                    </div>
-                `;
-            }
-            if(Object.keys(cardTotals).length === 0) cardHtml = '<p class="text-xs text-stone-400 text-center py-4">내역이 없습니다.</p>';
-            document.getElementById('cardCompanyList').innerHTML = cardHtml;
-
-            let tbody = document.getElementById('transactionTableBody');
-            let tHtml = '';
-            txs.forEach((t, index) => {
-                const amount = Number(t.amount) || 0;
-                let badge = t.user === '용이' ? 'bg-sky-50 text-sky-700' : (t.user === '갱이' ? 'bg-amber-50 text-amber-700' : 'bg-stone-100 text-stone-600');
-                tHtml += `
-                    <tr class="hover:bg-stone-50/50 transition">
-                        <td class="py-3 px-2 text-xs text-stone-400">${t.date}</td>
-                        <td class="py-3 px-2">
-                            <span class="font-semibold text-stone-700">${t.card}</span>
-                            <span class="text-[10px] px-1.5 py-0.5 rounded font-bold ml-1 ${badge}">${t.user}</span>
-                        </td>
-                        <td class="py-3 px-2 font-medium text-stone-800">${t.merchant}</td>
-                        <td class="py-3 px-2"><span class="text-xs bg-stone-100 text-stone-600 px-2 py-1 rounded-lg">${t.category}</span></td>
-                        <td class="py-3 px-2 text-right font-bold text-stone-900">${amount.toLocaleString()}원</td>
-                        <td class="py-3 px-2 text-center space-x-1">
-                            <button onclick="editTransaction(${index})" class="text-xs bg-stone-100 hover:bg-stone-200 text-stone-700 px-2 py-1 rounded-md transition font-medium">수정</button>
-                            <button onclick="deleteTransaction(${index})" class="text-xs bg-rose-50 hover:bg-rose-100 text-rose-600 px-2 py-1 rounded-md transition font-medium">삭제</button>
-                        </td>
-                    </tr>
-                `;
-            });
-            if(txs.length === 0) tHtml = `<tr><td colspan="6" class="py-6 text-center text-stone-400 text-sm">해당 월 내역이 없습니다.</td></tr>`;
-            tbody.innerHTML = tHtml;
-
-            let gaengTbody = document.getElementById('gaengTransactionTableBody');
-            let gaengHtml = '';
-            let gaengTxs = txs.filter(t => t.user === '갱이');
-            gaengTxs.forEach(t => {
-                const amount = Number(t.amount) || 0;
-                gaengHtml += `
-                    <tr class="hover:bg-stone-50/50 transition">
-                        <td class="py-3 px-2 text-xs text-stone-400">${t.date}</td>
-                        <td class="py-3 px-2 font-medium text-stone-700">${t.card}</td>
-                        <td class="py-3 px-2 font-medium text-stone-800">${t.merchant}</td>
-                        <td class="py-3 px-2"><span class="text-xs bg-amber-50 text-amber-700 px-2 py-1 rounded-lg">${t.category}</span></td>
-                        <td class="py-3 px-2 text-right font-bold text-amber-700">${amount.toLocaleString()}원</td>
-                    </tr>
-                `;
-            });
-            if(gaengTxs.length === 0) gaengHtml = `<tr><td colspan="5" class="py-6 text-center text-stone-400 text-sm">이번 달 갱이 사용 내역이 없습니다.</td></tr>`;
-            gaengTbody.innerHTML = gaengHtml;
-
-            renderMonthlySummaryTable();
-            updateChartsData();
-            renderMerchantComparisonTable();
-        }
-
-        function renderMonthlySummaryTable() {
-            let mBody = document.getElementById('monthlySummaryTableBody');
-            let html = '';
-            let sortedYMs = Object.keys(dbTransactions).sort().reverse().slice(0, 3);
-
-            sortedYMs.forEach(ym => {
-                let txs = dbTransactions[ym] || [];
-                let tot = txs.reduce((acc, cur) => acc + cur.amount, 0);
-                let yong = txs.filter(t => t.user === '용이').reduce((acc, cur) => acc + cur.amount, 0);
-                let gaeng = txs.filter(t => t.user === '갱이').reduce((acc, cur) => acc + cur.amount, 0);
-                let [y, m] = ym.split('-');
-
-                html += `
-                    <tr class="hover:bg-stone-50/50 transition">
-                        <td class="py-3 px-3 font-semibold text-stone-700">${y}년 ${parseInt(m)}월</td>
-                        <td class="py-3 px-3 font-bold">${tot.toLocaleString()}원</td>
-                        <td class="py-3 px-3 text-sky-700 font-medium">${yong.toLocaleString()}원</td>
-                        <td class="py-3 px-3 text-amber-700 font-medium">${gaeng.toLocaleString()}원</td>
-                        <td class="py-3 px-3 text-right"><span class="bg-stone-100 text-stone-700 text-xs px-2.5 py-1 rounded-full font-medium">정산완료</span></td>
-                    </tr>
-                `;
-            });
-            mBody.innerHTML = html;
-        }
-
-        function renderMerchantComparisonTable() {
-            let sortedYMs = Object.keys(dbTransactions).sort().slice(-3);
-            let headerEl = document.getElementById('merchantTableHeader');
-            let bodyEl = document.getElementById('merchantTableBody');
-
-            let headerHtml = `<th class="py-3 px-3">실제 사용처 (가맹점)</th>`;
-            sortedYMs.forEach(ym => {
-                let [y, m] = ym.split('-');
-                headerHtml += `<th class="py-3 px-3 text-right">${parseInt(m)}월</th>`;
-            });
-            headerEl.innerHTML = headerHtml;
-
-            let merchantsSet = new Set();
-            sortedYMs.forEach(ym => {
-                let txs = dbTransactions[ym] || [];
-                txs.forEach(t => merchantsSet.add(t.merchant));
-            });
-            let merchants = Array.from(merchantsSet);
-
-            let bodyHtml = '';
-            merchants.forEach(merchant => {
-                bodyHtml += `<tr class="hover:bg-stone-50/50 transition">`;
-                bodyHtml += `<td class="py-3 px-3 font-bold text-stone-800">${merchant}</td>`;
-
-                sortedYMs.forEach(ym => {
-                    let txs = dbTransactions[ym] || [];
-                    let sum = txs.filter(t => t.merchant === merchant).reduce((acc, cur) => acc + cur.amount, 0);
-                    let displayVal = sum > 0 ? sum.toLocaleString() + '원' : '-';
-                    bodyHtml += `<td class="py-3 px-3 text-right font-medium text-stone-600">${displayVal}</td>`;
-                });
-
-                bodyHtml += `</tr>`;
-            });
-
-            if(merchants.length === 0) {
-                bodyHtml = `<tr><td colspan="${sortedYMs.length + 1}" class="py-6 text-center text-stone-400 text-sm">비교할 사용처 내역이 없습니다.</td></tr>`;
-            }
-            bodyEl.innerHTML = bodyHtml;
-        }
-
-        function copySettlementToClipboard() {
-            let [y, m] = currentYearMonth.split('-');
-            let txs = dbTransactions[currentYearMonth] || [];
-            let gaengTxs = txs.filter(t => t.user === '갱이');
-            let gaengTotal = gaengTxs.reduce((acc, cur) => acc + cur.amount, 0);
-
-            let text = `💳 [${y}년 ${parseInt(m)}월 카드 정산 내역]\n`;
-            text += `👉 갱이가 용이에게 보낼 금액: ${gaengTotal.toLocaleString()}원 필요\n\n`;
-            text += `[갱이 사용 상세 내역]\n`;
-            if(gaengTxs.length > 0) {
-                gaengTxs.forEach(t => {
-                    text += `- ${t.date.substring(5,10)} | ${t.card} | ${t.merchant} | ${t.amount.toLocaleString()}원\n`;
-                });
-            } else {
-                text += `내역 없음\n`;
-            }
-
-            navigator.clipboard.writeText(text).then(() => {
-                alert('카카오톡 전송용 정산 내용이 클립보드에 복사되었습니다!');
-            });
-        }
-
-        function openAddModal() {
-            document.getElementById('modalTitle').innerText = "수동 거래 내역 추가";
-            document.getElementById('editIndex').value = "-1";
-            document.getElementById('inputDate').value = "2026-09-28 20:00";
-            document.getElementById('inputMerchant').value = "";
-            document.getElementById('inputAmount').value = "";
-            document.getElementById('addModal').classList.remove('hidden');
-            document.getElementById('addModal').classList.add('flex');
-        }
-
-        function editTransaction(index) {
-            let txs = dbTransactions[currentYearMonth] || [];
-            let t = txs[index];
-            if(!t) return;
-
-            document.getElementById('modalTitle').innerText = "거래 내역 수정";
-            document.getElementById('editIndex').value = index;
-            document.getElementById('inputDate').value = t.date;
-            document.getElementById('inputCard').value = t.card;
-            document.getElementById('inputUser').value = t.user;
-            document.getElementById('inputMerchant').value = t.merchant;
-            document.getElementById('inputAmount').value = t.amount;
-            document.getElementById('inputCategory').value = t.category;
-
-            document.getElementById('addModal').classList.remove('hidden');
-            document.getElementById('addModal').classList.add('flex');
-        }
-
-        function closeAddModal() {
-            document.getElementById('addModal').classList.remove('flex');
-            document.getElementById('addModal').classList.add('hidden');
-        }
-
-        function saveTransaction(e) {
-            e.preventDefault();
-            let editIndex = parseInt(document.getElementById('editIndex').value);
-            let date = document.getElementById('inputDate').value;
-            let card = document.getElementById('inputCard').value;
-            let user = document.getElementById('inputUser').value;
-            let merchant = document.getElementById('inputMerchant').value;
-            let amount = parseInt(document.getElementById('inputAmount').value);
-            let category = document.getElementById('inputCategory').value;
-
-            if(!dbTransactions[currentYearMonth]) dbTransactions[currentYearMonth] = [];
-
-            let txObj = { date, card, user, merchant, category, amount };
-
-            if(editIndex === -1) {
-                dbTransactions[currentYearMonth].unshift(txObj);
-                saveTransactionToGoogleSheet(txObj);
-                alert('내역이 추가되었습니다!');
-            } else {
-                dbTransactions[currentYearMonth][editIndex] = txObj;
-                alert('내역이 수정되었습니다!');
-            }
-
-            closeAddModal();
-            renderAll();
-        }
-
-        function deleteTransaction(index) {
-            if(confirm('정말 이 내역을 삭제하시겠습니까?')) {
-                dbTransactions[currentYearMonth].splice(index, 1);
-                renderAll();
-            }
-        }
-
-        function initCharts() {
-            let sortedYMs = Object.keys(dbTransactions).sort();
-            let labels = sortedYMs.map(ym => {
-                let [y, m] = ym.split('-');
-                return `${parseInt(m)}월`;
-            });
-
-            let yongData = sortedYMs.map(ym => (dbTransactions[ym]||[]).filter(t => t.user === '용이').reduce((acc, cur) => acc + cur.amount, 0));
-            let gaengData = sortedYMs.map(ym => (dbTransactions[ym]||[]).filter(t => t.user === '갱이').reduce((acc, cur) => acc + cur.amount, 0));
-
-            let ctxU = document.getElementById('userCompareChart').getContext('2d');
-            userCompareChart = new Chart(ctxU, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        { label: '용이', data: yongData, backgroundColor: '#38bdf8', borderRadius: 8 },
-                        { label: '갱이', data: gaengData, backgroundColor: '#fbbf24', borderRadius: 8 }
-                    ]
-                },
-                options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false, 
-                    plugins: { legend: { position: 'bottom' } }, 
-                    scales: { 
-                        x: { grid: { display: false } }, 
-                        y: { grid: { color: '#f5f5f4' }, beginAtZero: true } 
-                    } 
-                }
-            });
-
-            let ctxP = document.getElementById('categoryPieChart').getContext('2d');
-            categoryPieChart = new Chart(ctxP, {
-                type: 'doughnut',
-                data: {
-                    labels: ['식비/카페', '쇼핑/마트', '교통/주유', '의료/생활', '기타'],
-                    datasets: [{ data: [0,0,0,0,0], backgroundColor: ['#78716c', '#d97706', '#0ea5e9', '#10b981', '#cbd5e1'] }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
-            });
-        }
-
-        function updateChartsData() {
-            let txs = dbTransactions[currentYearMonth] || [];
-            let catMap = { '식비/카페': 0, '쇼핑/마트': 0, '교통/주유': 0, '의료/생활': 0, '기타': 0 };
-            txs.forEach(t => {
-                if(catMap[t.category] !== undefined) catMap[t.category] += t.amount;
-                else catMap['기타'] += t.amount;
-            });
-            if(categoryPieChart) {
-                categoryPieChart.data.datasets[0].data = Object.values(catMap);
-                categoryPieChart.update();
-            }
-
-            let sortedYMs = Object.keys(dbTransactions).sort();
-            let labels = sortedYMs.map(ym => { let [y, m] = ym.split('-'); return `${parseInt(m)}월`; });
-            let yongData = sortedYMs.map(ym => (dbTransactions[ym]||[]).filter(t => t.user === '용이').reduce((acc, cur) => acc + cur.amount, 0));
-            let gaengData = sortedYMs.map(ym => (dbTransactions[ym]||[]).filter(t => t.user === '갱이').reduce((acc, cur) => acc + cur.amount, 0));
-
-            if(userCompareChart) {
-                userCompareChart.data.labels = labels;
-                userCompareChart.data.datasets[0].data = yongData;
-                userCompareChart.data.datasets[1].data = gaengData;
-                userCompareChart.update();
-            }
-        }
-    </script>
-</body>
-</html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>카드 정산</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#EDF1EF;--card:#fff;--ink:#14302A;--mut:#5E716B;--line:#D3DDD9;--yong:#2E5E8C;--gaeng:#A63D6E;--fix:#8A9A94;--warn:#B45309}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 'Noto Sans KR',system-ui,sans-serif;font-variant-numeric:tabular-nums}
+main{max-width:720px;margin:0 auto;padding:12px 14px 80px}
+nav{position:sticky;top:0;z-index:5;background:var(--ink);display:flex;justify-content:center;gap:4px;padding:8px}
+nav button{flex:1;max-width:200px;border:0;background:none;color:#B8C9C3;padding:9px 0;border-radius:8px;font:500 15px inherit;font-family:inherit;cursor:pointer}
+nav button.on{background:#fff;color:var(--ink);font-weight:700}
+nav .gear{flex:0 0 40px}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--yong);outline-offset:2px}
+.bar{display:flex;align-items:center;gap:8px;margin:6px 0 12px}
+.bar select{flex:1;font:700 18px inherit;font-family:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+.ib{border:1px solid var(--line);background:#fff;border-radius:8px;width:40px;height:40px;font-size:16px;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px}
+.grid div{background:var(--card);border-radius:8px;padding:8px 6px;border-top:3px solid var(--k)}
+.grid small{display:block;color:var(--mut);font-size:12px}.grid b{font-size:14px}
+.slip{background:#fff;border:2px dashed var(--gaeng);border-radius:6px;padding:16px;margin-bottom:14px}
+.slip h2{margin:0;font-size:14px;color:var(--gaeng);font-weight:700}
+.slip .amt{font-size:32px;font-weight:700;margin:2px 0}
+.slip p{margin:0 0 12px;color:var(--mut);font-size:13px}
+.btn{border:0;background:var(--ink);color:#fff;border-radius:8px;padding:11px 14px;font:700 15px inherit;font-family:inherit;cursor:pointer}
+.btn.sub{background:#fff;color:var(--ink);border:1px solid var(--line);font-weight:500}
+.row{display:flex;gap:10px;align-items:center}.row label{display:flex;gap:6px;align-items:center;font-size:14px}
+.warn{background:#FFF7E8;border-left:4px solid var(--warn);padding:10px 12px;border-radius:4px;margin-bottom:14px;font-size:13px}
+.warn b{color:var(--warn)}.warn div{margin-top:4px}
+.chips{display:flex;gap:6px;margin-bottom:8px}.chips button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:5px 12px;font:inherit;cursor:pointer;color:var(--mut)}
+.chips button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.item{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.item .dt{width:34px;color:var(--mut);font-size:13px}.item .nm{flex:1;min-width:0}.item .nm span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .nm small{color:var(--mut)}.item .am{font-weight:500}.neg{color:var(--gaeng)}
+.tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:4px;color:#fff;margin-right:4px}
+.tag.y{background:var(--yong)}.tag.g{background:var(--gaeng)}.tag.f{background:var(--fix)}
+.box{background:#fff;border-radius:8px;padding:12px;margin-bottom:12px}.box h3{margin:0 0 8px;font-size:15px}
+.f{display:grid;grid-template-columns:1fr 1fr;gap:6px}.f select,.f input{padding:9px;border:1px solid var(--line);border-radius:8px;font:inherit;min-width:0}.f .w{grid-column:1/-1}
+.hb{height:10px;background:var(--line);border-radius:3px;display:flex;overflow:hidden;margin-top:3px}
+.hb i{display:block;height:100%}
+.empty{padding:30px 10px;text-align:center;color:var(--mut)}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:8px;opacity:0;transition:.2s;pointer-events:none}
+#toast.on{opacity:1}
+.f label{display:flex;gap:6px;align-items:center}.f label input{padding:0}</style></head><body>
+<nav><button data-t="m">이번 달 정산</button><button data-t="r">고정비규칙</button><button data-t="s">누적통계</button><button class="gear" id="gear" aria-label="연결 설정">⚙</button></nav>
+<main id="v"><div class="empty">불러오는 중…</div></main><div id="toast"></div>
+<script>
+const $=s=>document.querySelector(s),fmt=n=>(n<0?'-':'')+Math.abs(n).toLocaleString('ko-KR'),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const S={rows:[],rules:[],paid:{},m:'',tab:'m',f:'all'},YR=new Date().getFullYear();
+const cfg=()=>({u:localStorage.getItem('u')||'',t:localStorage.getItem('t')||''});
+function toast(t){const e=$('#toast');e.textContent=t;e.className='on';setTimeout(()=>e.className='',1600)}
+async function post(o){const c=cfg();await fetch(c.u,{method:'POST',body:JSON.stringify({token:c.t,...o})})}
+async function load(){
+  const c=cfg();if(!c.u){return setup()}
+  try{const r=await(await fetch(c.u+'?token='+encodeURIComponent(c.t))).json();if(r.error)throw 0;
+    S.rows=r.rows.map(x=>({...x,m:x.d.slice(0,7),day:x.d.slice(8,10)}));S.rules=r.rules;S.paid=r.paid;
+    const ms=months();if(!S.m||!ms.includes(S.m)){const now=new Date().toISOString().slice(0,7);S.m=ms.includes(now)?now:ms[0]||''}
+    render()}catch(e){$('#v').innerHTML='<div class="empty">시트에 연결하지 못했어요.<br>주소와 비밀번호를 확인해 주세요.<br><br><button class="btn" onclick="setup()">연결 설정</button></div>'}
+}
+function setup(){const u=prompt('Apps Script 웹앱 주소',cfg().u);if(u===null)return;const t=prompt('비밀번호(Code.gs의 TOKEN)',cfg().t);if(t===null)return;localStorage.setItem('u',u.trim());localStorage.setItem('t',t.trim());load()}
+const bad=x=>!/^\d{4}-\d{2}/.test(x.d)||x.day==='00'||+x.d.slice(0,4)<YR-1;
+const months=()=>[...new Set(S.rows.filter(x=>!bad(x)||/^\d{4}-\d{2}/.test(x.d)&&+x.d.slice(0,4)>=YR-1).map(x=>x.m))].sort().reverse();
+const isFix=x=>S.rules.some(r=>r.fix&&x.shop.toLowerCase().includes(r.keyword.toLowerCase()));
+function sum(m){const rs=S.rows.filter(x=>x.m===m);let t=0,fx=0,gg=0;rs.forEach(x=>{t+=x.amt;if(isFix(x))fx+=x.amt;else if(x.user==='갱이')gg+=x.amt});return{rs,t,fx,gg,yy:t-gg}}
+function issues(){const o=[],g={};S.rows.forEach(x=>{(g[x.shop+'|'+x.amt]=g[x.shop+'|'+x.amt]||[]).push(x)});
+  S.rows.forEach(x=>{const grp=g[x.shop+'|'+x.amt];let w='';
+    if(bad(x))w=(+x.d.slice(0,4)<YR-1?'연도 이상':'일자 누락');
+    if(grp.length>1&&(bad(x)||grp.some(y=>y!==x&&y.d===x.d)))w+=(w?' · ':'')+'중복 의심';
+    if(w)o.push({x,w})});return o}
+const mm=d=>(+d.slice(5,7))+'/'+(d.slice(8,10)==='00'?'?':+d.slice(8,10));
+const nextMon=m=>{const[y,n]=m.split('-').map(Number);return(n%12+1)+'/14'};
+function kakao(m){const s=sum(m),n=+m.slice(5);const l=s.rs.filter(x=>x.user==='갱이'&&!isFix(x)).sort((a,b)=>a.d<b.d?-1:1);
+  return`[${n}월 카드 정산]\n갱이 입금액: ${fmt(s.gg)}원\n${nextMon(m)} 인출 예정 · 용이 계좌로 입금 부탁해요\n\n`+l.map(x=>`${mm(x.d)} ${x.shop} ${fmt(x.amt)}`).join('\n')}
+function copy(t){(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).catch(()=>{const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove()}).then?.(()=>{});toast('복사했어요. 카톡에 붙여넣으세요')}
+function render(){document.querySelectorAll('nav button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===S.tab));({m:vM,r:vR,s:vS})[S.tab]()}
+function vM(){const ms=months();if(!S.m)return $('#v').innerHTML='<div class="empty">시트에 내역이 없어요.</div>';
+  const s=sum(S.m),is=issues(),i=ms.indexOf(S.m);
+  let rs=s.rs.slice().sort((a,b)=>a.d<b.d?1:-1);
+  if(S.f==='용이'||S.f==='갱이')rs=rs.filter(x=>x.user===S.f);if(S.f==='fix')rs=rs.filter(isFix);
+  $('#v').innerHTML=`<div class="bar"><button class="ib" id="pv" aria-label="이전 달" ${i>=ms.length-1?'disabled':''}>◀</button><select id="ms">${ms.map(m=>`<option ${m===S.m?'selected':''} value="${m}">${m.slice(0,4)}년 ${+m.slice(5)}월 사용분</option>`).join('')}</select><button class="ib" id="nx" aria-label="다음 달" ${i<=0?'disabled':''}>▶</button></div>
+  <div class="grid"><div style="--k:var(--ink)"><small>총 인출</small><b>${fmt(s.t)}</b></div><div style="--k:var(--yong)"><small>용이 부담</small><b>${fmt(s.yy)}</b></div><div style="--k:var(--gaeng)"><small>갱이 부담</small><b>${fmt(s.gg)}</b></div><div style="--k:var(--fix)"><small>고정비</small><b>${fmt(s.fx)}</b></div></div>
+  <div class="slip"><h2>갱이 입금 요청</h2><div class="amt">${fmt(s.gg)}원</div><p>${nextMon(S.m)} 인출 · 고정비는 제외한 갱이 사용분</p>
+  <div class="row"><button class="btn" id="cp">카톡용 복사</button><label><input type="checkbox" id="pd" ${S.paid[S.m]?'checked':''}>입금 확인</label></div></div>
+  ${is.length?`<div class="warn"><b>데이터 점검 ${is.length}건</b> · 13일 전에 시트에서 고쳐 주세요${is.slice(0,8).map(o=>`<div>${esc(o.x.d)} ${esc(o.x.shop)} ${fmt(o.x.amt)} → ${o.w} <small>(시트 ${o.x.r}행)</small></div>`).join('')}</div>`:''}
+  <div class="chips">${[['all','전체'],['용이','용이'],['갱이','갱이'],['fix','고정비']].map(([k,l])=>`<button data-f="${k}" class="${S.f===k?'on':''}">${l}</button>`).join('')}</div>
+  ${rs.map(x=>{const f=isFix(x);return`<div class="item"><span class="dt">${mm(x.d)}</span><div class="nm"><span>${esc(x.shop)}</span><small><span class="tag ${f?'f':x.user==='갱이'?'g':'y'}" style="display:inline">${f?'고정':esc(x.user)}</span>${esc(x.cat||'')}</small></div><span class="am ${x.amt<0?'neg':''}">${fmt(x.amt)}</span></div>`}).join('')||'<div class="empty">내역이 없어요.</div>'}`;
+  $('#ms').onchange=e=>{S.m=e.target.value;vM()};$('#pv').onclick=()=>{S.m=ms[i+1];vM()};$('#nx').onclick=()=>{S.m=ms[i-1];vM()};
+  $('#cp').onclick=()=>copy(kakao(S.m));
+  $('#pd').onchange=async e=>{S.paid[S.m]=e.target.checked;await post({action:'setPaid',month:S.m,paid:e.target.checked});toast(e.target.checked?'입금 확인 저장':'입금 확인 해제')};
+  document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{S.f=b.dataset.f;vM()})}
+const SEED=[['KB손해보험','용이','의료/생활',1],['LGU+ 통신요금','용이','의료/생활',1],['LG전자 구독','용이','의료/생활',1],['교보라이프플래닛생명보험','용이','의료/생활',1],['프리티 모바일','용이','의료/생활',1],['롯데손해보험','용이','의료/생활',1],['삼성화재해상보험','용이','의료/생활',1],['관리비','용이','의료/생활',1],['GS25 LGD','용이','기타',0],['서울도시가스','용이','의료/생활',1],['브레인리그 운정학원','용이','의료/생활',1],['이마트','갱이','식비/카페',0],['트레이더스','갱이','식비/카페',0],['무신사','갱이','식비/카페',0],['홈플러스','갱이','식비/카페',0],['주유소','용이','교통/주유',0],['쿠팡','갱이','식비/카페',0],['올리브영','갱이','쇼핑/마트',0],['시네마','용이','기타',0],['롯데아울렛 파주점','갱이','쇼핑/마트',0],['유니클로','갱이','쇼핑/마트',0],['GS25 파크타운점','갱이','식비/카페',0],['닥터디퍼런트','갱이','쇼핑/마트',0],['알리익스프레스','용이','기타',0],['서울SUN치과병원','갱이','의료/생활',0],['병원','갱이','의료/생활',0],['스타필드','갱이','쇼핑/마트',0],['산부인과의원','갱이','의료/생활',0],['약국','갱이','의료/생활',0],['버거킹','용이','식비/카페',0],['자동차검사비','갱이','기타',0],['롯데쇼핑','갱이','쇼핑/마트',0]];
+function vR(){const rs=S.rows.filter(x=>x.m===S.m),mt=(x,r)=>x.shop.toLowerCase().includes(r.keyword.toLowerCase());
+  const un=[...new Set(S.rows.filter(x=>!bad(x)&&!S.rules.some(r=>mt(x,r))).map(x=>x.shop.replace(/\s*[\(\|].*$/,'').trim()))].slice(0,10),R=S.rules.slice().sort((a,b)=>b.fix-a.fix);
+  $('#v').innerHTML=`<div class="box"><h3>규칙 추가</h3><div class="f"><input id="k" class="w" placeholder="가맹점 키워드 (예: 관리비)"><select id="ow"><option>용이</option><option>갱이</option></select><input id="ct" placeholder="카테고리"><label class="w"><input id="fx" type="checkbox">고정비 (용이 부담)</label></div><p style="margin:8px 0 0"><button class="btn" id="ad">추가</button> ${S.rules.length?'':'<button class="btn sub" id="sd">기본 규칙 불러오기</button>'}</p></div>
+  ${un.length?`<div class="warn"><b>규칙 없는 가맹점 ${un.length}곳</b>${un.map(k=>`<div>${esc(k)} <button class="btn sub" style="padding:2px 8px;font-size:12px" data-u="${esc(k)}">규칙으로</button></div>`).join('')}</div>`:''}
+  <div class="box"><h3>규칙 ${S.rules.length}개</h3>${R.map(r=>{const h=rs.filter(x=>mt(x,r)),a=h.reduce((t,x)=>t+x.amt,0);
+    return`<div class="item"><div class="nm"><span>${r.fix?'<span class="tag f">고정</span>':''}${esc(r.keyword)}</span><small>${esc(r.owner)} · ${esc(r.cat)}</small></div><span class="am" style="text-align:right">${h.length?fmt(a)+'<br><small style="color:var(--mut)">'+h.length+'건</small>':(r.fix?'<b style="color:var(--warn)">미결제</b>':'')}</span><button class="ib" data-d="${esc(r.keyword)}" aria-label="삭제">✕</button></div>`}).join('')||'<div class="empty">규칙이 없어요.</div>'}</div>`;
+  $('#ad').onclick=async()=>{const k=$('#k').value.trim();if(!k)return toast('키워드를 입력하세요');await post({action:'saveRule',keyword:k,owner:$('#ow').value,cat:$('#ct').value.trim(),fix:$('#fx').checked});await load()};
+  if($('#sd'))$('#sd').onclick=async()=>{await post({action:'saveRules',rules:SEED.map(a=>({keyword:a[0],owner:a[1],cat:a[2],fix:!!a[3]}))});await load()};
+  document.querySelectorAll('[data-u]').forEach(b=>b.onclick=()=>{$('#k').value=b.dataset.u;$('#k').focus();scrollTo(0,0)});
+  document.querySelectorAll('[data-d]').forEach(b=>b.onclick=async()=>{if(confirm(b.dataset.d+' 규칙을 삭제할까요?')){await post({action:'delRule',keyword:b.dataset.d});await load()}})}
+function vS(){const ms=months().slice().reverse().slice(-12),D=ms.map(m=>({m,...sum(m)})),mx=Math.max(1,...D.map(d=>d.t));
+  const yr=(S.m||'').slice(0,4),Y=D.filter(d=>d.m.startsWith(yr)),cat={},shop={};
+  S.rows.filter(x=>!bad(x)&&x.m.startsWith(yr)&&x.amt>0).forEach(x=>{cat[x.cat||'기타']=(cat[x.cat||'기타']||0)+x.amt;const k=x.shop.replace(/\s*[\(\|].*$/,'').trim();shop[k]=(shop[k]||0)+x.amt});
+  const ct=Object.entries(cat).sort((a,b)=>b[1]-a[1]),cm=ct[0]?ct[0][1]:1,tp=Object.entries(shop).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const un=D.filter(d=>d.gg>0&&!S.paid[d.m]);
+  $('#v').innerHTML=`<div class="box"><h3>갱이 ${yr}년 누적 ${fmt(Y.reduce((t,d)=>t+d.gg,0))}원</h3>${un.length?`<div class="warn" style="margin:0"><b>입금 미확인</b>${un.map(d=>`<div>${+d.m.slice(5)}월 ${fmt(d.gg)}원</div>`).join('')}</div>`:'<small style="color:var(--mut)">미확인 입금 없음</small>'}</div>
+  <div class="box"><h3>월별 총액 <small style="font-weight:400;color:var(--mut)">고정 ■ 변동 ■</small></h3>${D.slice().reverse().map(d=>`<div style="margin-bottom:10px"><div class="row" style="justify-content:space-between"><span>${d.m.slice(2).replace('-','.')}</span><span>${fmt(d.t)} <small style="color:var(--mut)">용이 ${fmt(d.yy)} · 갱이 ${fmt(d.gg)}</small></span></div><div class="hb" style="width:${d.t/mx*100}%"><i style="width:${d.fx/(d.t||1)*100}%;background:var(--fix)"></i><i style="flex:1;background:var(--yong)"></i></div></div>`).join('')}</div>
+  <div class="box"><h3>${yr}년 카테고리</h3>${ct.map(([k,v])=>`<div style="margin-bottom:8px"><div class="row" style="justify-content:space-between"><span>${esc(k)}</span><span>${fmt(v)}</span></div><div class="hb" style="width:${v/cm*100}%"><i style="flex:1;background:var(--ink)"></i></div></div>`).join('')}</div>
+  <div class="box"><h3>${yr}년 가맹점 TOP 5</h3>${tp.map(([k,v])=>`<div class="item"><span class="nm"><span>${esc(k)}</span></span><span class="am">${fmt(v)}</span></div>`).join('')}</div>`}
+document.querySelectorAll('nav button[data-t]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;render()});$('#gear').onclick=setup;load();
+</script></body></html>
